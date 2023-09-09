@@ -1,5 +1,6 @@
 
 ------------------------------------------------
+**Still under active revision and correction !**
 # Basic cfDNA-seq Analyses
 ## 1 Background
 ### 1.1 A fast introduction
@@ -10,7 +11,6 @@ In the realm of **liquid biopsy**, cfDNA has emerged as a non-invasive and promi
 Illustration | Features (Nongenetic)
 ----------- | ---
 ![review_2021-Science-cfDNA_1](./_plots/review_2021-Science-cfDNA_1.png) | ![Alt text](./_plots/review_2021-Science-cfDNA_2.png)
-
 
 
 
@@ -72,24 +72,17 @@ A glimpse of representative publications:
 
 ### 1.4 Resource
 Here are some useful links/tools of cfDNA analysis:
-- [ichorCNA](https://github.com/broadinstitute/ichorCNA): (2017, Nature Communications): cfDNA WGS CNA
-- [WindowProtectionScore](https://github.com/kircherlab/cfDNA) (2016, Cell): calculate cfDNA WPS for each sample at specific region
-- [cfDNApipe](https://github.com/XWangLabTHU/cfDNApipe) (2021, Bioinformatics): WGS,WGBS 
-- [CRAG](https://github.com/epifluidlab/cragr) (2022, Genome Medicine)
-- [Griffin](https://github.com/adoebley/Griffin) (2022, Nature Communications): cfDNA WGS GC-corrected coverage
-- [TritonNP](https://github.com/GavinHaLab) (2023, Cancer Discovery)
-- [cfDNAPro](https://github.com/hw538/cfDNAPro): R pkg for cfDNA fragments size distribution (quality control)
-
 tool | publication |  data | feature
 :---:|:---:|:---:|:---:
 [WPS](https://github.com/kircherlab/cfDNA) | 2016, Cell | WGS | WPS
-[ichorCNA](https://github.com/broadinstitute/ichorCNA) | 2017, Nature Communications | WGS,WES | CNV
+[ichorCNA](https://github.com/broadinstitute/ichorCNA) | 2017, Nature Communications | WGS,WES | CNV,TF
 [cfDNApipe](https://github.com/XWangLabTHU/cfDNApipe) | 2021, Bioinformatics | WGS,WGBS | QC,SNV,FragSize,OCF,CNV,DMR,Deconv,Mb
 [CRAG](https://github.com/epifluidlab/cragr) | 2022, Genome Medicine | WGS | IFS
 [Griffin](https://github.com/adoebley/Griffin) | 2022, Nature Communications | WGS | GC-corrected coverage 
-[TritonNP](https://github.com/GavinHaLab) | 2023, Cancer Discovery | WGS | ...
-[cfDNAPro](https://github.com/hw538/cfDNAPro) | R pkg | WGS | QC
+[TritonNP](https://github.com/GavinHaLab) | 2023, Cancer Discovery | WGS | NucleosomePhasingScore,FragLengthEntropy
+[cfDNAPro](https://github.com/hw538/cfDNAPro) | R pkg: Bioconductor | WGS | QC
 
+> TF: Tumor Fraction (ctDNA/cfDNA)
 > QC: cfDNA quality control cfDNA fragments size distribution with 10 bp periocity and 167 bp peak et al.
 > DMR: Diff Methy Region
 > Deconv: Methy-based deconvolution
@@ -97,71 +90,158 @@ tool | publication |  data | feature
 
 
 ----------------
-## 2 Upstream pipeline
+## 2 Config global environment
+### 2.1 Clone the repo
+   ```sh
+   git clone https://github.com/hunnngry/cfDNA-NGS-analysis.git
+   ```
+
+### 2.2 Create conda global environment
+   ```sh
+   cd cfDNA-NGS-analysis
+   # The default conda solver is a bit slow and sometimes has issues with selecting the special version packages. We recommend to install mamba as a drop-in replacement
+   ## option 1: install mambaforge (mamba included)
+    curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+    bash Mambaforge-$(uname)-$(uname -m).sh
+
+   ## option 2 (not recommended, many conflicts exist): use exist conda 
+   #conda install -n base --override-channels -c conda-forge mamba 'python_abi=*=*cp*'
+   export PATH=~/mambaforge/bin:$PATH # you can add this line to ~/.bashrc
+
+   mamba create -n cfvariance -c conda-forge -c bioconda python snakemake r-base=3.6.3 -y
+
+   ```
+TODO: add env file from exVariance4 ? /usr/bin/Rscript --> Rscript
+
+----------------
+## 3 Run upstream pipeline
 We only consider NGS data below
 **Notes**
-- genebody  (gencode v27): /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/gtf/gene.gtf
-- gene-wise 2.5kb  (gencode v27): /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/ref/gtf/promoter.gtf
-- gene-wise 2.5kb  (gencode v27): /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/ref/gtf/promoter.bed
-- bowtie2 index: /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/genome/bowtie2-index
-- bwa index: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/genome/bwa-mem2-index/
-- whole pipeline for **DIP-seq**: /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/scripts/snakefile.py 
-- whole pipeline for **BS-seq**: /BioII/lulab_b/baopengfei/projects/exOmics/BS-seq/scripts/BS-seq-pe.snakemake.py
-- whole pipeline for DNA-seq: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/DNA-seq-pe.snakefile.py (PE fq only)
+- genebody  (gencode v27): ./DNA-seq/ref/gtf/gene.gtf
+- gene-wise 2.5kb  (gencode v27): ./DIP-seq/ref/gtf/promoter.gtf
+- gene-wise 2.5kb  (gencode v27): ./DIP-seq/ref/gtf/promoter.bed
+- bowtie2 index: ./DIP-seq/genome/bowtie2-index
+- bwa index: ./DNA-seq/genome/bwa-mem2-index/
+- whole pipeline for **DIP-seq**: ./DIP-seq/scripts/snakefile.py 
+- whole pipeline for **BS-seq**: ./BS-seq/scripts/BS-seq-pe.snakemake.py
+- whole pipeline for DNA-seq: ./DNA-seq/scripts/DNA-seq-pe.snakefile.py (PE fq only)
 - other meta tables: [https://docs.qq.com/sheet/DT0NYU1Zxa2dBSnlq?tab=f8m6qf](https://docs.qq.com/sheet/DT0NYU1Zxa2dBSnlq?tab=f8m6qf) 
 
 
-### 2.1 DNA-seq
+### 3.1 DNA-seq
+the graph of pipeline (two samples) can be seen at ./DNA-seq/DAG
 ```bash
 #Paried-End WGS et al.
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
+cd  ./DNA-seq
 
 # config file 
-/BioII/lulab_b/baopengfei/projects/exOmics/test-DNA-seq/config/lulab.yaml
+./test-DNA-seq/config/lulab.yaml
 
 # meta dir
-/BioII/lulab_b/baopengfei/projects/exOmics/test-DNA-seq/data/lulab/meta_data
+./test-DNA-seq/data/lulab/meta_data
 
 # run in cluster (PE fq)
-/BioII/lulab_b/baopengfei/projects/exOmics/test-DNA-seq/run/lulab.sh
+./test-DNA-seq/run/lulab.sh
 ```
 
-### 2.2 DIP-seq
+### 3.2 DIP-seq
+the graph of pipeline (two samples) can be seen at ./DIP-seq/DAG
 ```bash
 #Paired-End cfMeDIP et al.
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq
+cd  ./DIP-seq
 
 # config file
-/BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/config/test.yaml
+./DIP-seq/config/test.yaml
 
 # meta dir
-/BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/meta/lulab/
+./DIP-seq/meta/lulab/
 
 # run in cluster (PE fq)
-/BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/run/lulab_cfmedip.sh
+./DIP-seq/run/lulab_cfmedip.sh
 ```
 
-### 2.3 BS-seq
+### 3.3 BS-seq
 ```bash
 #Paired-End WGBS et al.
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/BS-seq
+cd  ./BS-seq
 
 # config file 
-/BioII/lulab_b/baopengfei/projects/exOmics/BS-seq/config/test.yaml
+./BS-seq/config/test.yaml
 
 # meta dir
-/BioII/lulab_b/baopengfei/projects/exOmics/BS-seq/metadata/test
+./BS-seq/metadata/test
 
 # run in cluster (PE fq)
-/BioII/lulab_b/baopengfei/projects/exOmics/BS-seq/run/PRJNA534206.sh
+./BS-seq/run/PRJNA534206.sh
+```
+
+### 3.4 Quality control (Ngs.plot)
+## ## prepare
+server: hub
+conda env: py27
+直接conda install安装r-base最新版本和python2.7, 和其他github中要求的R包，并安装要求配置环境变量，安装hg38注释等
+
+```sh
+
+export NGSPLOT=/BioII/lulab_b/baopengfei/biosoft/ngsplot
+export PATH=/BioII/lulab_b/baopengfei/biosoft/ngsplot/bin:$PATH
+
+## ## plot single bam (without region filter, use default ensembl all anno)
+ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_config.txt -O in-house-5mC
+
+## ## pool bam files
+samtools merge  -@ 6  ./NC_pool.bam /BioII/lulab_b/baopengfei/2020proj/lulab_cfmedip_snakemake/output/lulab_cfmedip/04bam_dedup/NC-PKU*.bam 
+
+samtools index -@ 10 ./NC_pool.bam
+
+## ## plot pooled bam file (without region filter, use default ensembl all anno)
+ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_pool_config.txt -O in-house-pool-5mC
+
 ```
 
 
-## 3. Downstream pipeline
-### 3.1 CNV
+
+## 4 Downstream pipeline
+### 4.1 SNV
+- priority: mutect2 > haplopcaller
+- "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which means somatic，not germline 1000g_pon.hg38.vcf.gz
+- a panel of normals is simply a vcf of blacklisted sites flagged as recurrent artifacts
+- The optional germline resource can be any VCF that contains an AF (population allele frequency) INFO field. The Broad Institute provides a version of gnomAD stripped of all fields except AF. The Broad Institute also
+- provides several panels of normals, but users with a large number (at least 50 or so) may benefit from generating their own panel with CreateSomaticPanelOfNornals
+
+```bash
+cd ./DNA-seq
+sample="CRC-PKU-10-wgs"
+
+# run 
+gatk Mutect2 \
+  -R genome/fasta/hg38.fa \
+  -I output/lulab/bam-sorted-deduped-RG/${sample}.bam \
+  --germline-resource ref/SNV_ref/somatic-hg38_af-only-gnomad.hg38.vcf.gz \
+  --panel-of-normals ref/SNV_ref/somatic-hg38_1000g_pon.hg38.vcf.gz \
+  --native-pair-hmm-threads 10 \
+  -O output/lulab/mutect2/${sample}.vcf.gz
+
+# filter
+gatk FilterMutectCalls \
+   -R genome/fasta/hg38.fa \
+   -V output/lulab/mutect2/${sample}.vcf.gz \
+   -f-score-beta 1 \
+   -O output/lulab/mutect2/${sample}_FilterMutectCalls.vcf.gz
+
+gatk FilterMutectCalls \
+   -R genome/fasta/hg38.fa \
+   -V output/lulab/mutect2-vcf/${sample}.vcf.gz \
+   -f-score-beta 1 \
+   -O output/lulab/vcf-filtered/mutect2/${sample}.vcf.gz
+
+```
+
+
+### 4.2 CNV
 **option1**:
 ```bash
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
+cd  ./DNA-seq
 
 ## bam to count matrix
 featureCounts -T 4 -O -t gene -g gene_id -M -p  \
@@ -189,7 +269,7 @@ vi scripts/correctGC.R
 **option2: CNVkit**
 ```bash
 REF="genome/bwa-mem2-index/genome.fa"
-workdir="/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq"
+workdir="./DNA-seq"
 cd $workdir
 
 ## no matched normal (CRC as eg.)
@@ -242,7 +322,7 @@ cnvkit.py batch \
 ```bash
 # GISTIC2
 ## test inhouse
-workdir="/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq"
+workdir="./DNA-seq"
 cd $workdir
 
 ## To convert CNVkit’s .cns files to SEG
@@ -256,7 +336,7 @@ cnvkit.py export seg \
 done
 
 ## run gistic2
-cd /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
+cd ./DNA-seq
 REF="genome/bwa-mem2-index/genome.fa"
 mkdir -p  output/lulab/gistic2 
 
@@ -288,42 +368,8 @@ gistic2 \
 - focal_data_by_genes.txt output data is similar to the all_data_by_genes.txt output, but using only focal events with lengths greater than the focal length cutoff. This data is a gene-level table of copy number values for all samples. 
 - The returned copy number values are in units (copy number - 2) so that no amplification or deletion is 0, genes with amplifications have positive values
 
-### 3.2 SNV
-- priority: mutect2 > haplopcaller
-- "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which means somatic，not germline 1000g_pon.hg38.vcf.gz
-- a panel of normals is simply a vcf of blacklisted sites flagged as recurrent artifacts
-- The optional germline resource can be any VCF that contains an AF (population allele frequency) INFO field. The Broad Institute provides a version of gnomAD stripped of all fields except AF. The Broad Institute also
-- provides several panels of normals, but users with a large number (at least 50 or so) may benefit from generating their own panel with CreateSomaticPanelOfNornals
 
-```bash
-cd /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
-sample="CRC-PKU-10-wgs"
-
-# run 
-gatk Mutect2 \
-  -R genome/fasta/hg38.fa \
-  -I output/lulab/bam-sorted-deduped-RG/${sample}.bam \
-  --germline-resource ref/SNV_ref/somatic-hg38_af-only-gnomad.hg38.vcf.gz \
-  --panel-of-normals ref/SNV_ref/somatic-hg38_1000g_pon.hg38.vcf.gz \
-  --native-pair-hmm-threads 10 \
-  -O output/lulab/mutect2/${sample}.vcf.gz
-
-# filter
-gatk FilterMutectCalls \
-   -R genome/fasta/hg38.fa \
-   -V output/lulab/mutect2/${sample}.vcf.gz \
-   -f-score-beta 1 \
-   -O output/lulab/mutect2/${sample}_FilterMutectCalls.vcf.gz
-
-gatk FilterMutectCalls \
-   -R genome/fasta/hg38.fa \
-   -V output/lulab/mutect2-vcf/${sample}.vcf.gz \
-   -f-score-beta 1 \
-   -O output/lulab/vcf-filtered/mutect2/${sample}.vcf.gz
-
-```
-
-### 3.2 SV
+### 4.3 SV
 mavis，STAR-fusion and Manta within smk file should both be OK
 ```bash
 # run mavis 
@@ -337,67 +383,13 @@ mavis，STAR-fusion and Manta within smk file should both be OK
 #see/BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/SV.r
 ```
 
-
-### 3.1 NucleosomeFootprint
-Calculate (relative) coverage depth at NDR (nucleosome-depleted region) in genes
-- coverage depth of 3 region types can be used as gene-centric measures
-  - genebody
-  - -150TSS+50, 
-  - -300-100exon1end
-- relative read depth in a specific region as measurement (TPM/RPKM might also work), reflect this gene’s nuleosome structure 
-(more read depth, more compact nucleosome structure, less gene RNA expression)
-- clinical usage:
-  - early detection
-  - monitoring (0.5x)
-  - TOO
-![NucleosomeFootprint](NucleosomeFootprint.png)
-
-
-### 3.3 FragSize
-mainly adapted from **2019,Nat,Genome-wide cell-free DNA fragmentation in patients with cancer**
-```bash
-# get bam frag
-/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/frag/get-FragmentSizeBam.sh 
-
-# get ratio
-/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/frag/get-FragmentSizeDepth.sh 
-
-# join to matrix (eg)
-/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/frag/frag_size.R
-```
-
-
-### 3.3 EndMotif
-```bash
-# count motif freq.
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
-mkdir output/lulab/motif5
-for i in `cat meta/lulab/sample_ids.txt`
-do
-echo "start $i at `date`"
-python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/lulab/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/lulab/motif5/${i}_motif5.txt
-done
-
-# join outfile to matrix
-#see /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/motif/sum-motif.Rmd
-```
-
-
-
-### 3.2 WPS
+### 4.4 WPS
+**Notes**
 - the number of fragments spanning the window minus those with an endpoint within the window 
 - footprints of protein-DNA interactions(such as nucleosome positioning or TF binding) 
 - the windowed protection score (WPS) of a window of size k as the number of molecules spanning the window minus those with an endpoint within the window. We assign the determined WPS to the center of the window. For 35–80 bp fragments (short fraction, S WPS), k = 16; for 120–180 bp fragments (long fraction, L-WPS), k = 120.
 
-#### 3.2.1 pipeline
-1. Configure workflow Configure the workflow according to your needs via editing the files in the config/ folder. Adjust config.yaml to configure the workflow execution, samples.tsv to specify your sample setup and regions.tsv to specify target regions
-
-2. install snakemake
-```bash
-conda create -c bioconda -c conda-forge -n snakemake snakemake
-```
-
-3. Execute workflow
+**Steps**
 ```bash
 dst="lulab" 
 snakemake --rerun-incomplete --keep-going --printshellcmds --reason --use-conda --nolock --latency-wait 80 --restart-times 1 --jobs 100 \
@@ -426,10 +418,39 @@ e.g.:
 e.g.:
 
 
-### 3.5 Microbe
+### 4.5 NucleosomeFootprint
+Calculate (relative) coverage depth at NDR (nucleosome-depleted region) in genes
+- coverage depth of 3 region types can be used as gene-centric measures
+  - genebody
+  - -150TSS+50, 
+  - -300-100exon1end
+- relative read depth in a specific region as measurement (TPM/RPKM might also work), reflect this gene’s nuleosome structure 
+(more read depth, more compact nucleosome structure, less gene RNA expression)
+- clinical usage:
+  - early detection
+  - monitoring (0.5x)
+  - TOO
+![NucleosomeFootprint](./_plots/NucleosomeFootprint.png)
+
+
+### 4.6 FragSize
+mainly adapted from **2019,Nat,Genome-wide cell-free DNA fragmentation in patients with cancer**
+```bash
+# get bam frag
+./DNA-seq/scripts/frag/get-FragmentSizeBam.sh 
+
+# get ratio
+./DNA-seq/scripts/frag/get-FragmentSizeDepth.sh 
+
+# join to matrix (eg)
+./DNA-seq/scripts/frag/frag_size.R
+```
+
+
+### 4.7 EndMotif
 ```bash
 # count motif freq.
-cd  /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq
+cd  ./DNA-seq
 mkdir output/lulab/motif5
 for i in `cat meta/lulab/sample_ids.txt`
 do
@@ -438,72 +459,34 @@ python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-ana
 done
 
 # join outfile to matrix
-#see /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/scripts/motif/sum-motif.Rmd
+#see ./DNA-seq/scripts/motif/sum-motif.Rmd
 ```
 
 
+### 4.8 Microbe
+```bash
+# count motif freq.
+cd  ./DNA-seq
+mkdir output/lulab/motif5
+for i in `cat meta/lulab/sample_ids.txt`
+do
+echo "start $i at `date`"
+python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/lulab/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/lulab/motif5/${i}_motif5.txt
+done
 
-# # Quality control (Ngs.plot)
-![Alt text](./_plots/image-5.png)
-![Alt text](./_plots/image-1.png)
-![Alt text](./_plots/image-2.png)
-![Alt text](./_plots/image-3.png)
-![Alt text](./_plots/image-4.png)
-![Alt text](./_plots/image-6.png)
-![Alt text](./_plots/image-7.png)
-![Alt text](./_plots/image-8.png)
-![Alt text](./_plots/image-9.png)
-![Alt text](./_plots/image-10.png)
-![Alt text](./_plots/image-11.png)
-![Alt text](./_plots/image-12.png)
-![Alt text](./_plots/image-13.png)
-
-## ## prepare
-
-server: hub
-
-conda env: py27
-
-
-直接conda install安装r-base最新版本和python2.7, 和其他github中要求的R包，并安装要求配置环境变量，安装hg38注释等
-
-```sh
-
-export NGSPLOT=/BioII/lulab_b/baopengfei/biosoft/ngsplot
-export PATH=/BioII/lulab_b/baopengfei/biosoft/ngsplot/bin:$PATH
+# join outfile to matrix
+#see ./DNA-seq/scripts/motif/sum-motif.Rmd
 ```
 
 
-## ## plot single bam (without region filter, use default ensembl all anno)
-
-'''
-
-ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_config.txt -O in-house-5mC
-
-'''
-
- 
-
-## ## pool bam files
-
-'''
-
-samtools merge  -@ 6  ./NC_pool.bam /BioII/lulab_b/baopengfei/2020proj/lulab_cfmedip_snakemake/output/lulab_cfmedip/04bam_dedup/NC-PKU*.bam 
-
-samtools index -@ 10 ./NC_pool.bam
-
-'''
-
- 
-
-## ## plot pooled bam file (without region filter, use default ensembl all anno)
-
-'''
-
-ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_pool_config.txt -O in-house-pool-5mC
-
-'''
+## 5 Appendix 
+### 5.1 V-plot
+#TODO
 
 
-------------------------------------------------
-
+![Alt text](image-1.png)
+![Alt text](image-2.png)
+![Alt text](image-3.png)
+![Alt text](image-4.png)
+![Alt text](image-5.png)
+![Alt text](image-6.png)
