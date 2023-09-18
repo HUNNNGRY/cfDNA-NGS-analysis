@@ -1,0 +1,2 @@
+DNA-seq/output/test/bam-sorted-deduped/CRC.bam	-1	"CRC-pool"
+DNA-seq/output/test/bam-sorted-deduped/NC.bam	-1	"NC-pool"

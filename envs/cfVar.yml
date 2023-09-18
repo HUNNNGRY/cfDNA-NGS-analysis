@@ -1,0 +1,41 @@
+name: cfVar
+channels:
+  - eugene_t
+  - bioconda
+  - r
+  - conda-forge
+  - defaults
+  - https://conda.anaconda.org/IBMDecisionOptimization/linux-64
+  - http://conda.anaconda.org/dranew
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
+dependencies:
+  - fastqc=0.11.9
+  - fastp=0.23.2
+  - bwa-mem2=2.2
+  - bowtie2=2.3.5
+  - bismark=0.23.0
+  - umi_tools=1.1.2
+  - gatk4=4.2.0.0
+  - subread=1.6.2
+  - wisecondorx
+  - kraken2=2.1.2
+  - deeptools=3.5.0
+  - samtools=1.12
+  - bedtools=2.30.0
+  - snakemake=7.24.0
+  - python=3.7.12
+  - pip==21.2.4
+  - pip:
+    - pandas
+  - r-base=3.6.1
+  - r-argparse=2.0.3
+  - bioconductor-medips=1.38.0
+  - bioconductor-bsgenome=1.54.0
+  - bioconductor-bsgenome.hsapiens.ucsc.hg38
+  - bioconductor-edger=3.28.0
+
+#  - python=3.9.2
+#  #  - r-base=3.6.3
+#  #  - samtools=1.15.1
+#  #  - manta=1.6.0

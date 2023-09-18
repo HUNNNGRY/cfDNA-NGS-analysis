@@ -10,7 +10,7 @@ In the realm of **liquid biopsy**, cfDNA has emerged as a non-invasive and promi
 
 Illustration | Features (Nongenetic)
 ----------- | ---
-![review_2021-Science-cfDNA_1](./_plots/review_2021-Science-cfDNA_1.png) | ![Alt text](./_plots/review_2021-Science-cfDNA_2.png)
+![review_2021-Science-cfDNA_1](./_plots/review_2021-Science-cfDNA_1.png) | ![review_2021-Science-cfDNA_2](./_plots/review_2021-Science-cfDNA_2.png)
 
 
 
@@ -92,26 +92,24 @@ tool | publication |  data | feature
 ----------------
 ## 2 Config global environment
 ### 2.1 Clone the repo
-   ```sh
-   git clone https://github.com/hunnngry/cfDNA-NGS-analysis.git
-   ```
+```sh
+git clone https://github.com/hunnngry/cfDNA-NGS-analysis.git
+```
 
 ### 2.2 Create conda global environment
-   ```sh
-   cd cfDNA-NGS-analysis
-   # The default conda solver is a bit slow and sometimes has issues with selecting the special version packages. We recommend to install mamba as a drop-in replacement
-   ## option 1: install mambaforge (mamba included)
-    curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
-    bash Mambaforge-$(uname)-$(uname -m).sh
+```sh
+cd cfDNA-NGS-analysis
+# The default conda solver is a bit slow and sometimes has issues with selecting the special version packages. We recommend to install mamba as a drop-in replacement
+## install mambaforge (mamba included)
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+bash Mambaforge-$(uname)-$(uname -m).sh
+export PATH=~/mambaforge/bin:$PATH # you can add this line to ~/.bashrc
 
-   ## option 2 (not recommended, many conflicts exist): use exist conda 
-   #conda install -n base --override-channels -c conda-forge mamba 'python_abi=*=*cp*'
-   export PATH=~/mambaforge/bin:$PATH # you can add this line to ~/.bashrc
+# create the cfDNA base environment  
+mamba env create --name cfDNA_base --file ./envs/cfDNA_base.yml 
+source activate cfDNA_base
+```
 
-   mamba create -n cfvariance -c conda-forge -c bioconda python snakemake r-base=3.6.3 -y
-
-   ```
-TODO: add env file from exVariance4 ? /usr/bin/Rscript --> Rscript
 
 ----------------
 ## 3 Run upstream pipeline
@@ -129,111 +127,147 @@ We only consider NGS data below
 
 
 ### 3.1 DNA-seq
-the graph of pipeline (two samples) can be seen at ./DNA-seq/DAG
+For Paried-End WGS et al., the graph of pipeline (two samples) can be seen at ./DNA-seq/DAG
 ```bash
-#Paried-End WGS et al.
 cd  ./DNA-seq
+dst="test" # we show a dataset example named "test"
 
-# config file 
-./test-DNA-seq/config/lulab.yaml
+# prepare input fastq
+ls ./data/${dst}/fastq/*.fastq.gz
 
-# meta dir
-./test-DNA-seq/data/lulab/meta_data
+# prepare config file 
+vi ./config/${dst}.yaml
 
-# run in cluster (PE fq)
-./test-DNA-seq/run/lulab.sh
+# prepare meta dir
+vi ./data/${dst}/meta_data/sample_table.txt
+
+# opt1: submit to slurm cluster
+sbatch ./run/${dst}.sh
+
+# opt2: run in local
+snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
+  --use-conda --nolock --latency-wait 200 --restart-times 1 --jobs 16 \
+	--snakefile snakemake/DNA-seq-pe.snakemake \
+	--configfile config/${dst}.yaml \
+	> log/${dst}/run-${dst}.log 2>&1
 ```
 
 ### 3.2 DIP-seq
-the graph of pipeline (two samples) can be seen at ./DIP-seq/DAG
+For paired-End cfMeDIP et al., the graph of pipeline (two samples) can be seen at ./DIP-seq/DAG
 ```bash
-#Paired-End cfMeDIP et al.
 cd  ./DIP-seq
+dst="test" # we show a dataset example named "test"
 
-# config file
-./DIP-seq/config/test.yaml
+# prepare config file
+vi ./config/${dst}.yaml
 
-# meta dir
-./DIP-seq/meta/lulab/
+# prepare meta dir
+vi ./data/${dst}/meta_data/sample_table.txt
 
-# run in cluster (PE fq)
-./DIP-seq/run/lulab_cfmedip.sh
+# opt1: submit to slurm cluster
+sbatch ./run/${dst}.sh
+
+# opt2: run in local
+snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
+  --use-conda --nolock --latency-wait 200 --restart-times 1 --jobs 16 \
+	--snakefile snakemake/DIP-seq-pe.snakemake \
+	--configfile config/${dst}.yaml \
+	> log/${dst}/run-${dst}.log 2>&1
 ```
 
 ### 3.3 BS-seq
+For paired-End WGBS et al., the graph of pipeline (two samples) can be seen at ./BS-seq/DAG
 ```bash
-#Paired-End WGBS et al.
 cd  ./BS-seq
+dst="test" # we show a dataset example named "test"
 
-# config file 
-./BS-seq/config/test.yaml
+# prepare config file
+vi ./config/${dst}.yaml
 
-# meta dir
-./BS-seq/metadata/test
+# prepare meta dir
+vi ./data/${dst}/meta_data/sample_table.txt
 
-# run in cluster (PE fq)
-./BS-seq/run/PRJNA534206.sh
+# opt1: submit to slurm cluster
+sbatch ./run/${dst}.sh
+
+# opt2: run in local
+snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
+  --use-conda --nolock --latency-wait 200 --restart-times 1 --jobs 16 \
+	--snakefile snakemake/BS-seq-pe.snakemake \
+	--configfile config/${dst}.yaml \
+	> log/${dst}/run-${dst}.log 2>&1
 ```
 
-### 3.4 Quality control (Ngs.plot)
-## ## prepare
-server: hub
-conda env: py27
-直接conda install安装r-base最新版本和python2.7, 和其他github中要求的R包，并安装要求配置环境变量，安装hg38注释等
+### 3.4 Quality control 
+* Option1: Ngs.plot: https://github.com/shenlab-sinai/ngsplot
+* Option2: deeptools: https://deeptools.readthedocs.io/en/develop
 
+Check reads distribution around specific regions (gene body). We will test **Ngs.plot (v2.61)** as example
+#### prepare
 ```sh
+# config env described in Ngs.plot github
+mamba env create --name ngsplot r-base python=2.7
+source activate ngsplot
 
-export NGSPLOT=/BioII/lulab_b/baopengfei/biosoft/ngsplot
-export PATH=/BioII/lulab_b/baopengfei/biosoft/ngsplot/bin:$PATH
+# download Ngs.plot (v2.61)
+wget -c https://github.com/shenlab-sinai/ngsplot/archive/refs/tags/2.61.tar.gz -O ngsplot-2.61.tar.gz
+mkdir -p ~/biosoft; tar xzvf ngsplot-2.61.tar.gz -C ~/biosoft
 
-## ## plot single bam (without region filter, use default ensembl all anno)
-ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_config.txt -O in-house-5mC
+# config global env accordingly
+export NGSPLOT=~/biosoft/ngsplot-2.61
+export PATH=~/biosoft/ngsplot-2.61/bin:$PATH
 
-## ## pool bam files
-samtools merge  -@ 6  ./NC_pool.bam /BioII/lulab_b/baopengfei/2020proj/lulab_cfmedip_snakemake/output/lulab_cfmedip/04bam_dedup/NC-PKU*.bam 
+#also install other R pkgs that quired 
+R
+> install.packages("doMC", dep=T)
+> install.packages("caTools", dep=T)
+> #install.packages("utils", dep=T)
+> install.packages("BiocManager")
+> BiocManager::install( "BSgenome" )
+> #BiocManager::install( "Rsamtools" )
+> BiocManager::install( "ShortRead" )
 
-samtools index -@ 10 ./NC_pool.bam
+# install hg38 annotation
+ngsplotdb.py list  # List installed genomes.
+ngsplotdb.py install ngsplotdb_hg38_76_3.00.tar.gz  # Install reference genome from a package file.
 
-## ## plot pooled bam file (without region filter, use default ensembl all anno)
-ngs.plot.r -G hg38 -R genebody -C /BioII/lulab_b/baopengfei/biosoft/ngsplot/lulab_cfmedip_pool_config.txt -O in-house-pool-5mC
+# (if fail to download due to db issue)
+cp /BioII/lulab_b/baopengfei/biosoft/ngsplot/ngsplotdb_hg38_76_3.00.tar.gz ~/biosoft/ngsplot-2.61/
 
+# (optional: you may want to merge&index input bam before next step)
+#samtools merge
+#samtools index
+
+# modify config file
+vi config/test_ngsplot.txt
+#DNA-seq/output/test/bam-sorted-deduped/CRC.bam  -1      "CRC-pool"
+#DNA-seq/output/test/bam-sorted-deduped/NC.bam  -1      "NC-pool"
+
+# plot single bam (without region filter, use default ensembl all anno)
+mkdir -p test/ngsplot
+ngs.plot.r -G hg38 -R genebody \
+  -L 4000 \
+  -LWD 5 \
+  -YAS 0,0.2 \
+  -C config/test_ngsplot.txt -O test/ngsplot
+
+# check other available options
+ngs.plot.r --help # https://github.com/shenlab-sinai/ngsplot/wiki/ProgramArguments101
 ```
-
+e.g. output plot:
+![DNA_ngsplot](_plots/DNA_ngsplot.png)
 
 
 ## 4 Downstream pipeline
 ### 4.1 SNV
-- priority: mutect2 > haplopcaller
-- "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which means somatic，not germline 1000g_pon.hg38.vcf.gz
-- a panel of normals is simply a vcf of blacklisted sites flagged as recurrent artifacts
-- The optional germline resource can be any VCF that contains an AF (population allele frequency) INFO field. The Broad Institute provides a version of gnomAD stripped of all fields except AF. The Broad Institute also
-- provides several panels of normals, but users with a large number (at least 50 or so) may benefit from generating their own panel with CreateSomaticPanelOfNornals
+- priority: mutect2 >= haplopcaller
+- in required files, "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which actually means germline, instead of somatic
+- a panel of normals: a vcf file of blacklisted sites flagged as recurrent artifacts
+- The optional germline resource can be any vcf that contains an AF (population allele frequency) INFO field. The Broad Institute provides a version of gnomAD stripped of all fields except AF. The Broad Institute also provides several panels of normals, but users with a large number (at least 50 or so) may benefit from generating their own panel with CreateSomaticPanelOfNornals
 
 ```bash
 cd ./DNA-seq
-sample="CRC-PKU-10-wgs"
-
-# run 
-gatk Mutect2 \
-  -R genome/fasta/hg38.fa \
-  -I output/lulab/bam-sorted-deduped-RG/${sample}.bam \
-  --germline-resource ref/SNV_ref/somatic-hg38_af-only-gnomad.hg38.vcf.gz \
-  --panel-of-normals ref/SNV_ref/somatic-hg38_1000g_pon.hg38.vcf.gz \
-  --native-pair-hmm-threads 10 \
-  -O output/lulab/mutect2/${sample}.vcf.gz
-
-# filter
-gatk FilterMutectCalls \
-   -R genome/fasta/hg38.fa \
-   -V output/lulab/mutect2/${sample}.vcf.gz \
-   -f-score-beta 1 \
-   -O output/lulab/mutect2/${sample}_FilterMutectCalls.vcf.gz
-
-gatk FilterMutectCalls \
-   -R genome/fasta/hg38.fa \
-   -V output/lulab/mutect2-vcf/${sample}.vcf.gz \
-   -f-score-beta 1 \
-   -O output/lulab/vcf-filtered/mutect2/${sample}.vcf.gz
+rule: 
 
 ```
 
@@ -484,9 +518,9 @@ done
 #TODO
 
 
-![Alt text](image-1.png)
-![Alt text](image-2.png)
-![Alt text](image-3.png)
-![Alt text](image-4.png)
-![Alt text](image-5.png)
-![Alt text](image-6.png)
+![Alt text](_plots/image-1.png)
+![Alt text](_plots/image-2.png)
+![Alt text](_plots/image-3.png)
+![Alt text](_plots/image-4.png)
+![Alt text](_plots/image-5.png)
+![Alt text](_plots/image-6.png)

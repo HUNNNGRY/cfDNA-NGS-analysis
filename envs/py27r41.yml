@@ -1,0 +1,9 @@
+channels: 
+ - conda-forge
+ - bioconda
+ - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+ - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+ - defaults
+dependencies: 
+ - python=2.7
+ - r-base=4.1.0

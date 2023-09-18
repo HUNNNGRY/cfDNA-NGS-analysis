@@ -1,0 +1,19 @@
+name: cfDNA_base
+channels:
+  - bioconda
+  - r
+  - conda-forge
+  - defaults
+  - https://conda.anaconda.org/IBMDecisionOptimization/linux-64
+  - http://conda.anaconda.org/dranew
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
+dependencies:
+  - snakemake=7.24.0
+  - python=3.9.2
+  - pip==21.2.4
+  - pip:
+    - numpy
+    - pandas
+  - r-base=3.6.3
+  - r-argparse=2.0.3
