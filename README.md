@@ -1,7 +1,7 @@
 
 ------------------------------------------------
 **Still under active revision and correction !**
-# Basic cfDNA-seq Analyses
+# Basic cfDNA-seq analyses
 ## 1 Background
 ### 1.1 A fast introduction
 Circulating free DNA (**cfDNA**), also known as cell-free DNA or plasma DNA, is a crucial component in the field of liquid biopsy, particularly in the context of cancer research and diagnostics. cfDNA refers to the small fragments of DNA that are released into the biofluids (e.g.: blood) by various cells in the body, including cancerous cells. These fragments can carry genetic information that reflects the genomic alterations present in the originating cells. In cancer patients' biofluid, cancer tissue-derived cfDNA is also known as circulating tumor DNA, **ctDNA**.
@@ -32,7 +32,9 @@ A glimpse of representative publications:
 > more details and publications can be found at [gitbook](https://docs.ncrnalab.org/docs/literature-reading/med/2.-data-mining/cfdna), [cfDNA tencent table](https://docs.qq.com/sheet/DT0RCdEt0V3pQeVRj?tab=BB08J2), or within reviews.
 
 
+
 ### 1.3 Variation/Feature/Alteration types
+We only consider **NGS** data in this repo.
 #### DNA-seq (e.g. WGS)
 - SNV*
 - CNV*
@@ -80,6 +82,7 @@ tool | publication |  data | feature
 [CRAG](https://github.com/epifluidlab/cragr) | 2022, Genome Medicine | WGS | IFS
 [Griffin](https://github.com/adoebley/Griffin) | 2022, Nature Communications | WGS | GC-corrected coverage 
 [TritonNP](https://github.com/GavinHaLab) | 2023, Cancer Discovery | WGS | NucleosomePhasingScore,FragLengthEntropy
+[GEMINI](https://github.com/cancer-genomics/gemini_wflow) | 2023, Nature Genetics | WGS | SNV
 [cfDNAPro](https://github.com/hw538/cfDNAPro) | R pkg: Bioconductor | WGS | QC
 
 > TF: Tumor Fraction (ctDNA/cfDNA)
@@ -113,16 +116,13 @@ source activate cfDNA_base
 
 ----------------
 ## 3 Run upstream pipeline
-We only consider NGS data below
 **Notes**
-- genebody  (gencode v27): ./DNA-seq/ref/gtf/gene.gtf
-- gene-wise 2.5kb  (gencode v27): ./DIP-seq/ref/gtf/promoter.gtf
-- gene-wise 2.5kb  (gencode v27): ./DIP-seq/ref/gtf/promoter.bed
-- bowtie2 index: ./DIP-seq/genome/bowtie2-index
-- bwa index: ./DNA-seq/genome/bwa-mem2-index/
-- whole pipeline for **DIP-seq**: ./DIP-seq/scripts/snakefile.py 
-- whole pipeline for **BS-seq**: ./BS-seq/scripts/BS-seq-pe.snakemake.py
-- whole pipeline for DNA-seq: ./DNA-seq/scripts/DNA-seq-pe.snakefile.py (PE fq only)
+- path of inhouse annotation dir (gencode v27): /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/ref
+- path of inhouse bowtie2 index: /BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/genome/bowtie2-index
+- path of inhouse bwa-mem2 index: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/genome/bwa-mem2-index
+- whole pipeline for **DIP-seq**: ./DIP-seq/snakemake/DIP-seq-pe.snakemake 
+- whole pipeline for **BS-seq**: ./BS-seq/snakemake/BS-seq-pe.snakemake
+- whole pipeline for **DNA-seq**: ./DNA-seq/snakemake/DNA-seq-pe.snakemake
 - other meta tables: [https://docs.qq.com/sheet/DT0NYU1Zxa2dBSnlq?tab=f8m6qf](https://docs.qq.com/sheet/DT0NYU1Zxa2dBSnlq?tab=f8m6qf) 
 
 
@@ -152,7 +152,7 @@ snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
 	> log/${dst}/run-${dst}.log 2>&1
 ```
 
-### 3.2 DIP-seq
+### 3.2 DIP-seq (need test)
 For paired-End cfMeDIP et al., the graph of pipeline (two samples) can be seen at ./DIP-seq/DAG
 ```bash
 cd  ./DIP-seq
@@ -175,7 +175,7 @@ snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
 	> log/${dst}/run-${dst}.log 2>&1
 ```
 
-### 3.3 BS-seq
+### 3.3 BS-seq (need test)
 For paired-End WGBS et al., the graph of pipeline (two samples) can be seen at ./BS-seq/DAG
 ```bash
 cd  ./BS-seq
@@ -198,7 +198,11 @@ snakemake --rerun-incomplete --keep-going --printshellcmds --reason \
 	> log/${dst}/run-${dst}.log 2>&1
 ```
 
-### 3.4 Quality control 
+
+## 4 Downstream analysis
+Above upstream pipeline by snakemake will finish most basic analysis by in one command, in this part we will provide a series of personalized downstream analysis tutorial step-by-step.
+
+### 4.0 Quality control 
 * Option1: Ngs.plot: https://github.com/shenlab-sinai/ngsplot
 * Option2: deeptools: https://deeptools.readthedocs.io/en/develop
 
@@ -231,8 +235,9 @@ R
 ngsplotdb.py list  # List installed genomes.
 ngsplotdb.py install ngsplotdb_hg38_76_3.00.tar.gz  # Install reference genome from a package file.
 
-# (if fail to download due to db issue)
-cp /BioII/lulab_b/baopengfei/biosoft/ngsplot/ngsplotdb_hg38_76_3.00.tar.gz ~/biosoft/ngsplot-2.61/
+# (optional: use existing database if fail to download due to db issue)
+#cp /BioII/lulab_b/baopengfei/biosoft/ngsplot/ngsplotdb_hg38_76_3.00.tar.gz ~/biosoft/ngsplot-2.61/
+#cp -r /BioII/lulab_b/baopengfei/biosoft/ngsplot/database/hg38 ~/biosoft/ngsplot-2.61/database/hg38
 
 # (optional: you may want to merge&index input bam before next step)
 #samtools merge
@@ -254,21 +259,176 @@ ngs.plot.r -G hg38 -R genebody \
 # check other available options
 ngs.plot.r --help # https://github.com/shenlab-sinai/ngsplot/wiki/ProgramArguments101
 ```
-e.g. output plot:
+e.g. output plot within output dir:
 ![DNA_ngsplot](_plots/DNA_ngsplot.png)
 
 
-## 4 Downstream pipeline
 ### 4.1 SNV
-- priority: mutect2 >= haplopcaller
-- in required files, "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which actually means germline, instead of somatic
-- a panel of normals: a vcf file of blacklisted sites flagged as recurrent artifacts
-- The optional germline resource can be any vcf that contains an AF (population allele frequency) INFO field. The Broad Institute provides a version of gnomAD stripped of all fields except AF. The Broad Institute also provides several panels of normals, but users with a large number (at least 50 or so) may benefit from generating their own panel with CreateSomaticPanelOfNornals
+SNV includes single-base nucleotide variation, small insertion/deletion (INDEL<50nt) compared to reference genome.
+**Tools**
+* Somatic variant caller
+  *	GATK Mutect2
+  *	VarScan2
+  *	Strelka
+  *	LoFreq
+  *	VariantDx
+  *	SiNVICT (cfDNA, 2017, Bioinfomatics)
+* germline variant caller
+  * GATK HaplotypeCaller
+* variant annotation
+  * annovar: used with mafplot et al.
+  * vep (variantEffectPredictor): used with pyclone et al.
+
+
+**Notes:**
+* priority: Mutect2 >= HaplotypeCaller (both have been used in cfDNA mutation variant calling).
+* in required reference files, "somatic-hg38_" is actually prefix of downloaded directory，such as somatic-hg38_1000g_pon.hg38.vcf.gz, which actually means germline variant, that used for filtering before/during final somatic variant determination.
+* GATK Mutect2 --germline-resource: optional germline VCF file that contains an AF (population allele frequency) INFO field. Used to get the frequency of a AF, thereby providing the prior probability that the sample carries the allele in the germline. The Broad Institute provides a version of gnomAD stripped of all fields except AF (af-only-gnomad.hg38.vcf.gz).
+* GATK Mutect2 --panel-of-normals: optional VCF file of normal samples that used as a reference to filter out common sequencing artifacts and germline variants. A panel of normals is simply a vcf of blacklisted sites flagged as recurrent artifacts. The Broad Institute also provides several panels of normals (e.g.: 1000g_pon.hg38.vcf.gz), but users with a large number (n>=50) may benefit from generating their own panel with CreateSomaticPanelOfNornals.
+
 
 ```bash
 cd ./DNA-seq
-rule: 
+#mamba env create --name DNA --file snakemake/envs/DNA.yml # run for the first test
+source activate DNA
 
+# 1.Mutect2
+dst="test"
+sample_id="NC" 
+gn_fa_path="/BioII/lulab_b/baopengfei/shared_reference/hg38/genome.fa" # path of genome fasta
+#java_opt="--java-options -Xmx10G" # optional java options that set up mem: gatk HaplotypeCaller --java-options -Xmx10G
+tmp_dir="tmp"
+input_path="output/${dst}/bam-sorted-deduped-RG/${sample_id}.bam" # input path containing bam file (from streamlined smk)
+output_dir="output/${dst}_stepByStep" # output directory containing vcf files
+mkdir -p ${output_dir}/log/${sample_id}
+
+gnomad_path="/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref/somatic-hg38_af-only-gnomad.hg38.vcf.gz" # path of genomic gnomad vcf file: https://console.cloud.google.com/storage/browser/gatk-best-practices/somatic-hg38
+genome1k_path="/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref/somatic-hg38_1000g_pon.hg38.vcf.gz" # path of genomic genome1k vcf file: https://console.cloud.google.com/storage/browser/gatk-best-practices/somatic-hg38
+
+## 1.1.somatic mutation calling
+gatk Mutect2 \
+  -R ${gn_fa_path} \
+  -I ${input_path} \
+  -O ${output_dir}/mutect2-vcf/${sample_id}.vcf.gz \
+  --germline-resource ${gnomad_path} \
+  --panel-of-normals ${genome1k_path} \
+  --native-pair-hmm-threads 10 \
+  --tmp-dir ${tmp_dir} > ${output_dir}/log/${sample_id}/mutect2.log 2>&1
+
+#~25min with 16-core for test sample
+
+## 1.2.somatic mutation filtering
+gatk FilterMutectCalls \
+  -R ${gn_fa_path}  \
+  -V ${output_dir}/mutect2-vcf/${sample_id}.vcf.gz \
+  -O ${output_dir}/mutect2-vcf-filtered/${sample_id}.vcf.gz \
+  -f-score-beta 1 \
+  --tmp-dir ${tmp_dir} > ${output_dir}/log/${sample_id}/mutect2-filtering.log 2>&1
+
+## 1.3.check output
+zcat ${output_dir}/mutect2-vcf-filtered/${sample_id}.vcf.gz | less -S
+
+
+# 2.HaplotypeCaller 
+mkdir ${output_dir}/vcf{,-filtered}
+## 2.1.germline mutation calling
+gatk HaplotypeCaller \
+  -R ${gn_fa_path} \
+  -I ${input_path} \
+  -O ${output_dir}/vcf/${sample_id}.vcf.gz \
+  --tmp-dir ${tmp_dir} > ${output_dir}/log/${sample_id}/haplotypeCaller.log 2>&1
+
+#~20min with 16-core for test sample
+
+## 2.2.germline mutation filtering
+gatk VariantFiltration \
+  -R ${gn_fa_path} \
+  -V ${output_dir}/vcf/${sample_id}.vcf.gz \
+  -O ${output_dir}/vcf-filtered/${sample_id}.vcf.gz \
+  -window 35 -cluster 3 \
+  --filter-name FS20 -filter "FS > 20.0" \
+  --filter-name QD2 -filter "QD < 2.0" \
+  --filter-name DP10 -filter "DP < 10.0" \
+  --filter-name QUAL20 -filter "QUAL < 20.0" \
+  --tmp-dir ${tmp_dir} > ${output_dir}/log/${sample_id}/haplotypeCaller-filtering.log 2>&1
+
+## 2.3.check output
+zcat ${output_dir}/vcf-filtered/${sample_id}.vcf.gz | less -S
+
+
+#need finish processing variant-calling above for all samples before the following annotation step!
+
+
+# 3.mutation annotation 
+#https://github.com/mskcc/vcf2maf
+#cnode
+source activate maf
+#need install annovar first
+dst="test"
+# wd="/BioII/lulab_b/baopengfei/cooperation/yinjianhua"
+software="/BioII/lulab_b/baopengfei/biosoft/annovar"
+ref="/BioII/lulab_b/baopengfei/biosoft/annovar/humandb/hg38"
+# input="${wd}/output/wes-mutect2-FilterMutectCalls"
+# output="${wd}/output/wes-mutect2-FilterMutectCalls/annotation"
+input_dir="output/${dst}_stepByStep/mutect2-vcf-filtered"
+output_dir="output/${dst}_stepByStep/mutect2-vcf-filtered/annotation"
+mkdir -p ${output_dir}
+
+#only select SNP using gatk SelectVariants -select-type SNP -V wes.raw.vcf -O wes.snp.vcf
+
+## 3.1.convert
+cat data/${dst}/meta_data/sample_ids.txt | while read sample_id
+do
+  #sample_id="NC"
+  echo ${sample_id}
+  perl ${software}/convert2annovar.pl \
+    -format vcf4 \
+    -withfreq ${input_dir}/${sample_id}.vcf.gz \
+    > ${output_dir}/${sample_id}.avinput
+done
+
+## 3.2.annotation
+#Gene-based Annotation
+#Region-based Annotation 
+#Filter-based Annotation
+cat data/${dst}/meta_data/sample_ids.txt | while read sample_id
+do
+  #sample_id="NC"
+  echo ${sample_id}
+  perl ${software}/table_annovar.pl \
+    ${output_dir}/${sample_id}.avinput \
+    -buildver hg38 -remove -operation g,r,r -nastring . \
+    -protocol ensGene,cytoBand,genomicSuperDups \
+    ${ref} \
+    -out ${output_dir}/${sample_id}
+done
+#refGene 有注释无法下载好像
+#-buildver hg19 表示使用hg19版本
+#-out snpanno 表示输出文件的前缀为snpanno
+#-remove 表示删除注释过程中的临时文件
+#-protocol 表示注释使用的数据库，用逗号隔开，且要注意顺序
+#-operation 表示对应顺序的数据库的类型（g代表gene-based、r代表region-based、f代表filter-based），用逗号隔开，注意顺序
+#-nastring . 表示用点号替代缺省的值
+#-csvout 表示最后输出.csv文件
+#-thread 表示线程数，仅集群可以用
+ 
+## 3.3.merge files of all samplesall samples
+#在上一步每个_multianno.txt最后加上sampleID列并合并所有文件
+cat data/${dst}/meta_data/sample_ids.txt | while read sample_id
+do
+  #sample_id="NC"
+  echo ${sample_id}
+  grep -v '^Chr' ${output_dir}/${sample_id}.hg38_multianno.txt | cut -f 1-12 | awk -v T=${sample_id} '{print $0"\t"T}' > ${output_dir}/${sample_id}.annovar.vcf
+done
+ 
+head -1 ${output_dir}/NC.annovar.vcf > ${output_dir}/annovar_merge.vcf
+tail -n +2 -q ${output_dir}/*.annovar.vcf >> ${output_dir}/annovar_merge.vcf
+
+
+# 3.visualization
+Rscript ./scripts/maftools.R ${output_dir}/annovar_merge.vcf \
+  /BioII/lulab_b/baopengfei/shared_reference/geneset/IntOGen-Drivers-20200213/Compendium_Cancer_Genes.tsv \
+  COREAD
 ```
 
 
@@ -417,7 +577,7 @@ mavis，STAR-fusion and Manta within smk file should both be OK
 #see/BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/SV.r
 ```
 
-### 4.4 WPS
+### 4.4 WPS (Liyu)
 **Notes**
 - the number of fragments spanning the window minus those with an endpoint within the window 
 - footprints of protein-DNA interactions(such as nucleosome positioning or TF binding) 
@@ -452,7 +612,7 @@ e.g.:
 e.g.:
 
 
-### 4.5 NucleosomeFootprint
+### 4.5 NucleosomeFootprint (Liyu)
 Calculate (relative) coverage depth at NDR (nucleosome-depleted region) in genes
 - coverage depth of 3 region types can be used as gene-centric measures
   - genebody
