@@ -240,8 +240,8 @@ ngsplotdb.py install ngsplotdb_hg38_76_3.00.tar.gz  # Install reference genome f
 #cp -r /BioII/lulab_b/baopengfei/biosoft/ngsplot/database/hg38 ~/biosoft/ngsplot-2.61/database/hg38
 
 # (optional: you may want to merge&index input bam before next step)
-#samtools merge
-#samtools index
+#samtools merge -f merged.bam input_*.bam 
+#samtools index merged.bam
 
 # modify config file
 vi config/test_ngsplot.txt
@@ -259,7 +259,7 @@ ngs.plot.r -G hg38 -R genebody \
 # check other available options
 ngs.plot.r --help # https://github.com/shenlab-sinai/ngsplot/wiki/ProgramArguments101
 ```
-e.g. output plot within output dir:
+e.g. output figure of cfMeDIP (with paired WGS) within output dir:
 ![DNA_ngsplot](_plots/DNA_ngsplot.png)
 
 
@@ -421,9 +421,8 @@ do
   grep -v '^Chr' ${output_dir}/${sample_id}.hg38_multianno.txt | cut -f 1-12 | awk -v T=${sample_id} '{print $0"\t"T}' > ${output_dir}/${sample_id}.annovar.vcf
 done
  
-head -1 ${output_dir}/NC.annovar.vcf > ${output_dir}/annovar_merge.vcf
-tail -n +2 -q ${output_dir}/*.annovar.vcf >> ${output_dir}/annovar_merge.vcf
-
+cat ${output_dir}/*.annovar.vcf > ${output_dir}/annovar_merge.vcf # concate all samples to one file
+sed -i '1s/^/Chr\tStart\tEnd\tRef\tAlt\tFunc.refGene\tGene.refGene\tGeneDetail.refGene\tExonicFunc.refGene\tAAChange.refGene\tcytoBand\tgenomicSuperDups\tTumor_Sample_Barcode\n/' ${output_dir}/annovar_merge.vcf # add header (13 cols)
 
 # 3.visualization
 Rscript ./scripts/maftools.R ${output_dir}/annovar_merge.vcf \
@@ -441,20 +440,20 @@ cd  ./DNA-seq
 featureCounts -T 4 -O -t gene -g gene_id -M -p  \
 	-a ref/gtf/gene.gtf \
 	-o raw_count_matrix \
-	output/lulab/bam-sorted-deduped/*.bam \
+	output/test/bam-sorted-deduped/*.bam \
 	> raw_count_matrix.log 2>&1
 
 /usr/bin/Rscript scripts/multiFeatureCounts2countMat.R   \
         -i raw_count_matrix  \
-        -o output/lulab/matrix/count_matrix_gene.txt
+        -o output/test/matrix/count_matrix_gene.txt
 
 ## count matrix to CPM matrix
 /usr/bin/Rscript  scripts/run-NormCountMat.R  \
-	-i  output/lulab/matrix/count_matrix_gene.txt \
-	-s  meta/lulab/sample_ids.txt \
+	-i  output/test/matrix/count_matrix_gene.txt \
+	-s  meta/test/sample_ids.txt \
 	-m  TMM  \
-	-o  output/lulab/matrix/CPM-TMM_matrix_gene.txt  \
-  >  output/lulab/matrix/log/NormCountMat_gene.log 2>&1
+	-o  output/test/matrix/CPM-TMM_matrix_gene.txt  \
+  >  output/test/matrix/log/NormCountMat_gene.log 2>&1
 
 ## correct GC (manually)
 vi scripts/correctGC.R
@@ -468,29 +467,28 @@ cd $workdir
 
 ## no matched normal (CRC as eg.)
 cnvkit.py batch \
-    output/lulab/bam-sorted-deduped-RG/CRC*.bam \
+    output/test/bam-sorted-deduped-RG/CRC*.bam \
     --normal \
     --method wgs \
     -p 10 \
     --fasta ${REF} \
-    --output-reference output/lulab/cnvkit/my_reference.cnn \
-    --output-dir output/lulab/cnvkit \
+    --output-reference output/test/cnvkit/my_reference.cnn \
+    --output-dir output/test/cnvkit \
     --scatter
 
 ## has matched normal (CRC as eg.)
 cnvkit.py batch \
-    output/lulab/bam-sorted-deduped-RG/CRC*.bam \
-    --normal  output/lulab/bam-sorted-deduped-RG/NC*.bam \
+    output/test/bam-sorted-deduped-RG/CRC*.bam \
+    --normal  output/test/bam-sorted-deduped-RG/NC*.bam \
     --method wgs \
     -p 10 \
     --fasta ${REF} \
-    --output-reference output/lulab/cnvkit/my_reference.cnn \
-    --output-dir output/lulab/cnvkit \
+    --output-reference output/test/cnvkit/my_reference.cnn \
+    --output-dir output/test/cnvkit \
     --scatter
 ```
 
 **Notes:** 
-
 - optionally choose to remove duplicated sequences (wgs automatically calculate from genome)
 - optionally choose to remove blacklist regions (--access, wgs automatically calculate from genome)
 - automatically correct GC content
@@ -521,26 +519,26 @@ cd $workdir
 
 ## To convert CNVkit’s .cns files to SEG
 #NUMEXPR_MAX_THREADS=4 
-for i in `cat meta/lulab/sample_ids.txt |grep -v CRC`
+for i in `cat meta/test/sample_ids.txt |grep -v CRC`
 do
 cnvkit.py export seg \
  --enumerate-chroms \
- -o  output/lulab/cnvkit/${i}.cns.seg \
- output/lulab/cnvkit/${i}.cns
+ -o  output/test/cnvkit/${i}.cns.seg \
+ output/test/cnvkit/${i}.cns
 done
 
 ## run gistic2
 cd ./DNA-seq
 REF="genome/bwa-mem2-index/genome.fa"
-mkdir -p  output/lulab/gistic2 
+mkdir -p  output/test/gistic2 
 
 ## merge all samples in a project
-cat  output/lulab/cnvkit/*.cns.seg | grep -v chr > output/lulab/cnvkit/allsamples.cns.seg
+cat  output/test/cnvkit/*.cns.seg | grep -v chr > output/test/cnvkit/allsamples.cns.seg
 
 ## run gistic2
 gistic2 \
- -b output/lulab/gistic2 \
- -seg   output/lulab/cnvkit/allsamples.cns.seg \
+ -b output/test/gistic2 \
+ -seg   output/test/cnvkit/allsamples.cns.seg \
  -refgene /BioII/lulab_b/baopengfei/shared_reference/gistic2/hg38.UCSC.add_miR.160920.refgene.mat \
  -armpeel 1 \
  -brlen 0.7 \
@@ -564,14 +562,14 @@ gistic2 \
 
 
 ### 4.3 SV
-mavis，STAR-fusion and Manta within smk file should both be OK
+mavis，STAR-fusion and Manta within snakemake file should both be OK
 ```bash
 # run mavis 
 /BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/mavis-fusion.sh
 # run STAR-fusion
 /BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/star-fusion.sh
 # run Manta
-#see DNA smk file fule: prepareMantaConfig and runMantan
+#see DNA snakemake file fule: prepareMantaConfig and runMantan
 
 # get matrix & plot (eg)
 #see/BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/SV.r
@@ -585,7 +583,7 @@ mavis，STAR-fusion and Manta within smk file should both be OK
 
 **Steps**
 ```bash
-dst="lulab" 
+dst="test" 
 snakemake --rerun-incomplete --keep-going --printshellcmds --reason --use-conda --nolock --latency-wait 80 --restart-times 1 --jobs 100 \
 --snakefile snakefile_WPS.smk \
 --configfile config/${dst}/config_small.yml \
@@ -645,11 +643,11 @@ mainly adapted from **2019,Nat,Genome-wide cell-free DNA fragmentation in patien
 ```bash
 # count motif freq.
 cd  ./DNA-seq
-mkdir output/lulab/motif5
-for i in `cat meta/lulab/sample_ids.txt`
+mkdir output/test/motif5
+for i in `cat meta/test/sample_ids.txt`
 do
 echo "start $i at `date`"
-python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/lulab/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/lulab/motif5/${i}_motif5.txt
+python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/test/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/test/motif5/${i}_motif5.txt
 done
 
 # join outfile to matrix
@@ -661,11 +659,11 @@ done
 ```bash
 # count motif freq.
 cd  ./DNA-seq
-mkdir output/lulab/motif5
-for i in `cat meta/lulab/sample_ids.txt`
+mkdir output/test/motif5
+for i in `cat meta/test/sample_ids.txt`
 do
 echo "start $i at `date`"
-python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/lulab/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/lulab/motif5/${i}_motif5.txt
+python /BioII/lulab_b/baopengfei/gitsoft/cfdna-main/cfdna_practical.py motif-analysis -b output/test/04bam_dedup/${i}.bam -s  False -m 4 | head -n1 | cut -d "{" -f 4 | cut -d "}" -f 1 | tr "," "\n" | tr -d " " > output/test/motif5/${i}_motif5.txt
 done
 
 # join outfile to matrix
@@ -676,11 +674,16 @@ done
 ## 5 Appendix 
 ### 5.1 V-plot
 #TODO
-
-
+fragment/insertion size length distribution:
+![Alt text](_plots/image-6.png)
+basic quality control metrics:
 ![Alt text](_plots/image-1.png)
 ![Alt text](_plots/image-2.png)
+cfDNA WGS nucleosome footprint
 ![Alt text](_plots/image-3.png)
+cfDNA WGS SV
 ![Alt text](_plots/image-4.png)
+cfDNA WGS CNV
 ![Alt text](_plots/image-5.png)
-![Alt text](_plots/image-6.png)
+cfDNA WGS vplot
+![Alt text](_plots/cfDNA_vplot.png)
