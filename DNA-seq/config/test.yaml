@@ -1,0 +1,42 @@
+dataset: test # dataset name  
+pair_end: True # input type: PE or SE
+onlykeep_properpair: False # PE: only preserve properly mapped read pair (keep -f 2)  
+remove_duplications: True # remove duplicated reads at the same genomic position (start + end)
+wig_binsize: 50 # binsize of output wig 
+cnv_binsize: 10000 # binsize for one CNV calculation: 10000 for 3x, 100000 for 0.3x
+gn_size: 2862010578 # valid genome size 
+
+## correction
+BQSR: False # add BQSR correction by GATK
+correct_GC: False # add GC-content correction
+
+## cfDNA features
+SNV: True # perform SNV calculation
+CNV_coverage: True # perform CNV calculation using bedtools coverage (CNV ption1)
+CNV_WisecondorX: True # perform CNV calculation using WisecondorX (CNV ption2) (need >10 ref samples)
+CNV_CNVkit: True # perform CNV calculation using CNVkit (CNV ption3)
+SV_manta: True # perform SV calculation
+microbe: True # perform Mb count calculation
+fragsize: True # perform FragSize calculation
+
+ref_group: ctrl # group name of ctrl sample (to build CNV reference et al.)
+count_regions: promoter150TSS50,promoter300100exon1end,gene,promoter,gene_exon1,CDS,UTR3,UTR5,CpG_island,LINE,SINE,retroposon,enhancer_pred # region list to count reads (gene is required for CNV calculation, others are optional)
+
+## path/dir/prefix of some references
+tmp_dir: ./temp # dir to store temporary files
+gn_dir: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/genome # dir to store genome related files:
+#genome.fa: 
+#chr.size:
+#rmsk.bed: UCSC
+#hg38_blacklist.bed: 
+gtf_dir: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/gtf # dir to store gtf files defined in count_regions (gene.gtf is required for CNV calculation, others are optional)
+trim_galore_path: /BioII/lulab_b/baopengfei/biosoft/TrimGalore-0.6.6/trim_galore # path of trim_galore (most versions are not available in conda)
+bwa_index_prefix: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/genome/bwa-mem2-index/genome # prefix of bwa-mem2 index
+#gn_fa_path: /BioII/lulab_b/baopengfei/shared_reference/hg38/genome.fa # path of genome fasta
+#gn_2bit_path: /BioII/lulab_b/baopengfei/shared_reference/hg38/2bit/hg38.2bit # path of 2-bit genome, required in GC-content correction (deeptools correctGCBias)
+
+SNP_dir: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref # dir to store SNP vcf files:
+# dbSNP_path: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref/All_20180418.vcf.gz # path of genomic dbSNP vcf file: https://ftp.ncbi.nih.gov/snp/organisms/human_9606/VCF/
+# gnomad_path: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref/somatic-hg38_af-only-gnomad.hg38.vcf.gz # path of genomic gnomad vcf file: https://console.cloud.google.com/storage/browser/gatk-best-practices/somatic-hg38
+# genome1k_path: /BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/ref/SNV_ref/somatic-hg38_1000g_pon.hg38.vcf.gz # path of genomic genome1k vcf file: https://console.cloud.google.com/storage/browser/gatk-best-practices/somatic-hg38
+kraken2db_dir: /BioII/lulab_b/jinyunfan/data/standard-db # parent dir of kraken2db

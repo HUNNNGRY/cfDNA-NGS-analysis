@@ -1,0 +1,7 @@
+dataset: test
+adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+binsize: 50
+dedup: true
+insertion_min: 50
+insertion_max: 500

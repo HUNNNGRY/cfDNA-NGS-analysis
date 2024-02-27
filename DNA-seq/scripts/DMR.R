@@ -1,0 +1,1 @@
+/BioII/lulab_b/baopengfei/projects/exOmics/DIP-seq/scripts/DE.R

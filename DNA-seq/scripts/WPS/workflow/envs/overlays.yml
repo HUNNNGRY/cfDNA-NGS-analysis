@@ -1,0 +1,16 @@
+#
+# add lxml for plot_overlap.py error
+name: cfDNA_plots
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - scipy
+  - statsmodels
+  - lxml

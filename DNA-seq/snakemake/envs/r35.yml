@@ -1,0 +1,14 @@
+channels: 
+ - conda-forge
+ - bioconda
+ - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+ - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+ - defaults
+dependencies: 
+ - python=3.9.1
+ - pandas=1.1.5
+ - r-base=3.5.1
+ - bioconductor-medips=1.34.0
+ - bioconductor-bsgenome.hsapiens.ucsc.hg38=1.4.1
+ - r-argparse=2.0.1
+ - snakemake=5.30.1

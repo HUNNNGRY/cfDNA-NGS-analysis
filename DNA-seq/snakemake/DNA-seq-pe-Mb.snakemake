@@ -1,0 +1,33 @@
+shell.prefix("set -x; set -e;")
+include: 'DNA-seq-common.snakemake'
+
+
+################################################################
+# Microbe (kraken2 by jinyunfan)
+################################################################
+rule countMicrobe:
+    input:
+        unmapped_1="{outdir}/unmapped/{sample_id}_1.fastq.gz",
+        unmapped_2="{outdir}/unmapped/{sample_id}_2.fastq.gz",
+        # database="/Share2/home/lulab/jinyunfan/data/kraken2db/standard-db"
+    output:
+        report="{outdir}/microbe/report/{sample_id}.txt",
+        unclassified_1="{outdir}/microbe/unclassified/{sample_id}_1.fastq.gz",
+        unclassified_2="{outdir}/microbe/unclassified/{sample_id}_2.fastq.gz",
+        assignment="{outdir}/microbe/assignment/{sample_id}.txt.gz"
+    conda:
+        "envs/DNA_Mb.yml"
+    params:
+        unclassified="{outdir}/microbe/unclassified/{sample_id}#.fastq",
+    threads:
+        16
+    log:
+        "{outdir}/log/{sample_id}/kraken2-classification.log"
+    shell:
+        """
+        LANG=C perl -e exit
+        kraken2 --db {kraken2db_dir} --paired --threads 6 --unclassified-out {params.unclassified} --report {output.report}  --use-names  {input.unmapped_1} {input.unmapped_2}  >  {output.assignment} 2> {log}
+        gzip  {output.assignment}
+        gzip  {wildcards.outdir}/microbe/unclassified/{wildcards.sample_id}_1.fastq 
+        gzip  {wildcards.outdir}/microbe/unclassified/{wildcards.sample_id}_2.fastq 
+        """

@@ -1,0 +1,40 @@
+shell.prefix("set -x; set -e;")
+include: 'DNA-seq-common.snakemake'
+
+
+################################################################
+# Structural Variation (manta)
+################################################################
+## Config manta structural variation caller
+rule prepareMantaConfig:
+    input:
+        bam=bam_dir+"/{sample_id}.bam" if config["BQSR"] else "{outdir}/bam-sorted-deduped/{sample_id}.bam", 
+        # reference="genome/fasta/hg38.fa"
+    output:
+        config="{outdir}/struatural-variation/{sample_id}/runWorkflow.py.config.pickle",
+        script="{outdir}/struatural-variation/{sample_id}/runWorkflow.py" 
+    log: "{outdir}/log/{sample_id}/prepareMantaConfig.log"
+    conda:
+        'envs/DNA_SV_manta.yml'
+    shell:
+        """
+        configManta.py --bam {input.bam} --referenceFasta {gn_fa_path} --runDir "{wildcards.outdir}/struatural-variation/{wildcards.sample_id}"  > {log} 2>&1
+        """
+
+## Call structure variation
+rule runMantan:
+    input:
+        bam=bam_dir+"/{sample_id}.bam" if config["BQSR"] else outdir+"/bam-sorted-deduped/{sample_id}.bam", 
+        # reference="genome/fasta/hg38.fa",
+        config=outdir+"/struatural-variation/{sample_id}/runWorkflow.py.config.pickle",
+        script=outdir+"/struatural-variation/{sample_id}/runWorkflow.py"
+    output:
+        sv=outdir+"/struatural-variation/{sample_id}/results/variants/candidateSV.vcf.gz"
+    threads: 16
+    log: outdir+"/log/{sample_id}/runMantan.log"
+    conda:
+        'envs/DNA_SV_manta.yml'
+    shell:
+        """
+        {input.script} -j 6 > {log} 2>&1
+        """

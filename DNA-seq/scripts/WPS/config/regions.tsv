@@ -1,0 +1,3 @@
+target	path
+TSS	"/BioII/lulab_b/baopengfei/shared_reference/hg38/promoter150TSS50.bed"
+Exon1end	"/BioII/lulab_b/baopengfei/shared_reference/hg38/promoter300100exon1end.bed"

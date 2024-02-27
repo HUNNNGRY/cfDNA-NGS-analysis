@@ -1,0 +1,134 @@
+shell.prefix('set -x; set -e;')
+
+sample_ids = open("metadata/{}/sample_ids.txt".format(config["dataset"])).read().strip().split("\n")
+indir = "data/{}".format(config["dataset"])
+outdir = "output/{}".format(config["dataset"])
+dataset = "{}".format(config["dataset"])
+
+def request(config,outdir,sample_ids):
+    output = dict()
+    if config["qc0"]:
+        output["qc0"] = expand('{outdir}/qc0/{sample_id}/{sample_id}_fastqc.html',outdir=outdir,sample_id=sample_ids)
+    if config["qc1"]:
+        output["qc1"] = expand('{outdir}/qc1/{sample_id}/{sample_id}_fastqc.html',outdir=outdir,sample_id=sample_ids)
+    if config["mapping"]:
+        if config["remove_duplications"]: 
+            output["bam"] = expand("{outdir}/bam/{sample_id}.deduplicated.bam",outdir=outdir,sample_id=sample_ids)
+        else:
+            output["bam"] = expand("{outdir}/bam/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+    if config["coverage"]:
+        output["bedgraph"] = expand("{outdir}/methylation/{sample_id}/{sample_id}.bedGraph.gz",outdir=outdir,sample_id=sample_ids)
+    return list(output.values())
+
+rule all:
+    input:request(config,outdir,sample_ids)
+        
+
+
+rule qc0:
+    input:
+        fastq = indir+'/{sample_id}.fastq.gz',
+    output:
+        report = '{outdir}/qc0/{sample_id}/{sample_id}_fastqc.html',
+    shell:
+        """
+        fastqc -o {wildcards.outdir}/qc0/{wildcards.sample_id} {input.fastq} 
+        """
+
+rule trimming:
+    input:
+        fastq = indir+'/{sample_id}.fastq.gz',
+    output:
+        fastq = '{outdir}/trimmed/{sample_id}.fastq.gz',
+    params:
+        outdir='{outdir}/trimmed',
+        quality = 30,
+        protocol = config["protocol"],
+        clip = "--clip_R1 " + str(config["clip"]) if config["clip"] > 0 else "",
+        clip_3p = "--three_prime_clip_R1 " + str(config["clip_3p"]) if config["clip_3p"] > 0 else "",
+        direction = "--non_directional" if (config["protocol"]=="RRBS" and not config["directional"]) else "",
+        rrbs = "--rrbs" if config["protocol"] == "RRBS" else "",
+        trimn = "" if config["protocol"] == "RRBS" else "--trim-n" 
+    threads:
+        5
+    log:
+        report = '{outdir}/log/{sample_id}/trimming_statistics.txt',
+        log = '{outdir}/log/{sample_id}/trimming.txt'
+    shell:
+        """
+        # Cut adapt for different libraries         
+        trim_galore --phred33  {params.rrbs} {params.direction} {params.trimn} --cores {threads} \
+         {params.clip}  {params.clip_3p} --quality {params.quality} -o {params.outdir} \
+        --basename {wildcards.sample_id} {input.fastq}  > {log.log} 2>&1
+
+        # Rename cleaned fastq files
+        mv {params.outdir}/{wildcards.sample_id}_trimmed.fq.gz {output.fastq}
+
+        # Rename log files
+        mv {params.outdir}/{wildcards.sample_id}.fastq.gz_trimming_report.txt {log.report}
+        """
+
+
+rule qc1:
+    input:
+        fastq = '{outdir}/trimmed/{sample_id}.fastq.gz',
+    output:
+        report = '{outdir}/qc1/{sample_id}/{sample_id}_fastqc.html',
+    shell:
+        """
+        fastqc -o {wildcards.outdir}/qc1/{wildcards.sample_id} {input.fastq}
+        """
+
+rule bismark_alignment:
+    input:
+        fastq = '{outdir}/trimmed/{sample_id}.fastq.gz',
+    output:
+        bam = "{outdir}/bam/{sample_id}.bam",
+        report = "{outdir}/log/{sample_id}/bismark-report.txt"
+    params:
+        outdir = "{outdir}/bam",
+        tmpdir = "{outdir}/tmp",
+        protocol = config["protocol"],
+        mode = {"local":"--local","end-to-end":""}[config["alignment_mode"]],
+        direction = "" if config["directional"] else "--non_directional"
+    threads:
+        4
+    log:
+        '{outdir}/log/{sample_id}/bismark.txt'
+    shell:
+        """
+        bismark  genome/index/bismark -p {threads} {params.direction} {params.mode} -o {params.outdir} --gzip --temp_dir {params.tmpdir} {input.fastq} > {log} 2>&1
+        mv {params.outdir}/{wildcards.sample_id}_bismark_bt2.bam {output.bam}
+        mv {params.outdir}/{wildcards.sample_id}_bismark_bt2_SE_report.txt {output.report}
+
+        """
+
+rule bismark_dedup:
+    input:
+        bam = "{outdir}/bam/{sample_id}.bam"
+    output:
+        bam = "{outdir}/bam/{sample_id}.deduplicated.bam"
+    params:
+        protocol = config["protocol"]
+    shell:
+        """
+        deduplicate_bismark --bam --output_dir {wildcards.outdir}/bam --outfile {wildcards.sample_id}  {input.bam}
+        """ 
+
+rule bismark_extract:
+    input:
+        bam = "{outdir}/bam/{sample_id}.bam" if not config["remove_duplications"] else "{outdir}/bam/{sample_id}.deduplicated.bam"
+    output:
+        bedgraph = "{outdir}/methylation/{sample_id}/{sample_id}.bedGraph.gz" 
+    params:
+        cores = "--multicore 4",
+        buffer = "--buffer_size 4G",
+        ignore = "--ignore " + str(config["ignore"]) if config["ignore"]>0 else ""
+    log:
+        "{outdir}/log/{sample_id}/extraction.txt"
+    shell:
+        """         
+        bismark_methylation_extractor {params.cores} {params.ignore} --no_overlap --gzip --bedgraph {params.buffer} -o {wildcards.outdir}/methylation/{wildcards.sample_id} {input.bam} > {log} 2>&1
+        [ -f {output.bedgraph} ] || ln -s ${{PWD}}/{wildcards.outdir}/methylation/{wildcards.sample_id}/{wildcards.sample_id}.deduplicated.bedGraph.gz ${{PWD}}/{output.bedgraph}
+        """
+

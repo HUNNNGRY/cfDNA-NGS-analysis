@@ -1,0 +1,210 @@
+shell.prefix('set -x; set -e;')
+
+sample_ids = open("metadata/{}/sample_ids.txt".format(config["dataset"])).read().strip().split("\n")
+indir = "data/{}".format(config["dataset"])
+outdir = "output/{}".format(config["dataset"])
+dataset = "{}".format(config["dataset"])
+
+def request(config,outdir,sample_ids):
+    output = dict()
+    if config["qc0"]:
+        output["qc0"] = expand('{outdir}/qc0/{sample_id}/{sample_id}_1_fastqc.html',outdir=outdir,sample_id=sample_ids)
+        ## output["fastp"] = expand('{outdir}/01fastp/log/{sample_id}_fastp.html',outdir=outdir,sample_id=sample_ids)
+    if config["qc1"]:
+        output["qc1"] = expand('{outdir}/qc1/{sample_id}/{sample_id}_1_fastqc.html',outdir=outdir,sample_id=sample_ids)
+    if config["mapping"]:
+        if config["remove_duplications"]: 
+            output["bam"] = expand("{outdir}/bam/{sample_id}.deduplicated.bam",outdir=outdir,sample_id=sample_ids)
+        else:
+            output["bam"] = expand("{outdir}/bam/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+    if config["coverage"]:
+        output["bedgraph"] = expand("{outdir}/methylation/{sample_id}/{sample_id}.bedGraph.gz",outdir=outdir,sample_id=sample_ids)
+    return list(output.values())
+
+rule all:
+    input:request(config,outdir,sample_ids)
+
+'''        
+rule fastp:
+    input:
+        mate1=indir+'/{sample_id}_1.fastq.gz',
+        mate2=indir+'/{sample_id}_2.fastq.gz'
+    output:
+        fastq1='{outdir}/01fastp/{sample_id}_1.fastq.gz',
+        fastq2='{outdir}/01fastp/{sample_id}_2.fastq.gz',
+        html='{outdir}/01fastp/log/{sample_id}_fastp.html',
+        json='{outdir}/01fastp/log/{sample_id}_fastp.json'
+    log:
+        '{outdir}/01fastp/log/{sample_id}_fastp.log'
+    threads:
+        6
+    shell:
+        """
+        fastp --thread {threads} -i {input.mate1} -I {input.mate2} \
+        -o {output.fastq1} -O {output.fastq2} \
+        -h {output.html} -j {output.json} \
+        > {log} 2>&1
+        """
+'''
+
+rule qc0:
+    input:
+        fastq1=indir+'/{sample_id}_1.fastq.gz',
+        fastq2=indir+'/{sample_id}_2.fastq.gz'
+    output:
+        report1='{outdir}/qc0/{sample_id}/{sample_id}_1_fastqc.html',
+        report2='{outdir}/qc0/{sample_id}/{sample_id}_2_fastqc.html'
+    params:
+        outdir='{outdir}/qc0/{sample_id}'
+    shell:
+        """
+        fastqc -o {params.outdir} {input.fastq1} 
+        fastqc -o {params.outdir} {input.fastq2}
+        """
+
+rule extractUMI:
+    input:
+        fastq1 = indir+'/{sample_id}_1.fastq.gz',
+        fastq2 = indir+'/{sample_id}_2.fastq.gz'
+    output:
+        fastq1 = temp('{outdir}/UMI-extracted/{sample_id}_1.fastq.gz'),
+        fastq2 = temp('{outdir}/UMI-extracted/{sample_id}_2.fastq.gz'),
+    log:
+        log = '{outdir}/log/{sample_id}/extract-UMI.txt'
+    shell:
+        """
+        umi_tools extract --extract-method=string -I {input.fastq1} --read2-in={input.fastq2} --bc-pattern=NNNNN \
+        --stdout={outdir}/UMI-extracted/{wildcards.sample_id}_tmp_1.fastq.gz \
+        --read2-out={wildcards.outdir}/UMI-extracted/{wildcards.sample_id}_tmp_2.fastq.gz  > {log.log} 2>&1
+        
+        zcat {wildcards.outdir}/UMI-extracted/{wildcards.sample_id}_tmp_1.fastq.gz | awk 'NR%4==1{{gsub("_",":",$1);print $1;next;}}{{print}}' | gzip -c > {output.fastq1}
+        zcat {wildcards.outdir}/UMI-extracted/{wildcards.sample_id}_tmp_2.fastq.gz | awk 'NR%4==1{{gsub("_",":",$1);print $1;next;}}{{print}}' | gzip -c > {output.fastq2}
+        
+        rm {wildcards.outdir}/UMI-extracted/{wildcards.sample_id}_tmp_1.fastq.gz
+        rm {wildcards.outdir}/UMI-extracted/{wildcards.sample_id}_tmp_2.fastq.gz
+        """
+
+
+rule trimming:
+    input:
+        fastq1 = indir + '/{sample_id}_1.fastq.gz' if config["protocol"] != "MCTA" else '{outdir}/UMI-extracted/{sample_id}_1.fastq.gz',
+        fastq2 = indir + '/{sample_id}_2.fastq.gz' if config["protocol"] != "MCTA" else '{outdir}/UMI-extracted/{sample_id}_2.fastq.gz'
+    output:
+        fastq1 = '{outdir}/trimmed/{sample_id}_1.fastq.gz',
+        fastq2 = '{outdir}/trimmed/{sample_id}_2.fastq.gz',
+    params:
+        outdir='{outdir}/trimmed',
+        quality = 30,
+        direction = "--non_directional" if ( not config["directional"] and config["protocol"] == "RRBS" ) else "",
+        clip1 = "--clip_R1 " + str(config["clip1"]) if config["clip1"] > 0 else "",
+        clip1_3p = "--three_prime_clip_R1 " + str(config["clip1_3p"]) if config["clip1_3p"] > 0 else "", 
+        clip2 = "--clip_R2 " + str(config["clip2"]) if config["clip2"] > 0 else "",
+        clip2_3p = "--three_prime_clip_R2 " + str(config["clip2_3p"]) if config["clip2_3p"] > 0 else "",
+        rrbs = "--rrbs" if config["protocol"] == "RRBS" else "",
+        trimn = "" if config["protocol"] == "RRBS" else "--trim-n",
+        adaptor1 = "" if "adaptor1" not in config else "-a " + config["adaptor1"],
+        adaptor2 = "" if "adaptor2" not in config else "-a2 " + config["adaptor2"]
+    threads:
+        5
+    log:
+        report1 = '{outdir}/log/{sample_id}/trimming_statistics_1.txt',
+        report2 = '{outdir}/log/{sample_id}/trimming_statistics_2.txt',
+        log = '{outdir}/log/{sample_id}/trimming.txt'
+    shell:
+        """
+        # Cut adapt for different libraries         
+        trim_galore --phred33 --paired {params.rrbs} {params.trimn} {params.adaptor1} {params.adaptor2}\
+        {params.clip1} {params.clip1_3p} {params.clip2} {params.clip2_3p} \
+        --cores {threads} --quality {params.quality} {params.direction} \
+        -o {params.outdir} --basename {wildcards.sample_id} {input.fastq1} {input.fastq2} > {log.log} 2>&1
+
+        # Rename cleaned fastq
+        mv -f {params.outdir}/{wildcards.sample_id}_val_1.fq.gz {output.fastq1}
+        mv -f {params.outdir}/{wildcards.sample_id}_val_2.fq.gz {output.fastq2}
+
+        # Rename log files
+        mv -f {params.outdir}/{wildcards.sample_id}_1.fastq.gz_trimming_report.txt {log.report1}
+        mv -f {params.outdir}/{wildcards.sample_id}_2.fastq.gz_trimming_report.txt {log.report2}
+        """
+
+
+rule qc1:
+    input:
+        fastq1='{outdir}/trimmed/{sample_id}_1.fastq.gz',
+        fastq2='{outdir}/trimmed/{sample_id}_2.fastq.gz'
+    output:
+        report1='{outdir}/qc1/{sample_id}/{sample_id}_1_fastqc.html',
+        report2='{outdir}/qc1/{sample_id}/{sample_id}_2_fastqc.html'
+    params:
+        outdir='{outdir}/qc1/{sample_id}'
+    shell:
+        """
+        fastqc -o {params.outdir} {input.fastq1}
+        fastqc -o {params.outdir} {input.fastq2}
+        """
+
+rule bismark_alignment:
+    input:
+        fastq1 = '{outdir}/trimmed/{sample_id}_1.fastq.gz',
+        fastq2 = '{outdir}/trimmed/{sample_id}_2.fastq.gz'
+    output:
+        bam = "{outdir}/bam/{sample_id}.bam",
+        report = "{outdir}/log/{sample_id}/bismark-report.txt"
+    params:
+        outdir = "{outdir}/bam",
+        tmpdir = "{outdir}/tmp",
+        protocol = config["protocol"],
+        mode = {"local":"--local","end-to-end":""}[config["alignment_mode"]],
+        direction = "" if config["directional"] else "--non_directional"
+    threads:
+        4
+    log:
+        '{outdir}/log/{sample_id}/bismark.txt'
+    shell:
+        """
+        bismark  genome/index/bismark -p {threads} {params.mode} {params.direction} -1 {input.fastq1} -2 {input.fastq2} -o {params.outdir} --gzip --temp_dir {params.tmpdir} > {log} 2>&1
+        mv -f {params.outdir}/{wildcards.sample_id}_1_bismark_bt2_pe.bam {output.bam}
+        mv -f {params.outdir}/{wildcards.sample_id}_1_bismark_bt2_PE_report.txt {output.report}
+        """
+
+
+
+rule bismark_dedup:
+    input:
+        bam = "{outdir}/bam/{sample_id}.bam"
+    output:
+        bam = "{outdir}/bam/{sample_id}.deduplicated.bam"
+    params:
+        protocol = config["protocol"]
+    shell:
+        """
+        if [ {params.protocol} = "MCTA" ];then
+        deduplicate_bismark --barcode --bam --output_dir {wildcards.outdir}/bam --outfile {wildcards.sample_id}  {input.bam}
+        else
+        deduplicate_bismark --bam --output_dir {wildcards.outdir}/bam --outfile {wildcards.sample_id}  {input.bam}
+        fi
+        mv -f {wildcards.outdir}/bam/{wildcards.sample_id}.deduplication_report.txt {wildcards.outdir}/log/{wildcards.sample_id}/
+        """ 
+
+
+rule bismark_extract:
+    input:
+        bam = "{outdir}/bam/{sample_id}.bam" if not config["remove_duplications"] else "{outdir}/bam/{sample_id}.deduplicated.bam"
+    output:
+        bedgraph = "{outdir}/methylation/{sample_id}/{sample_id}.bedGraph.gz" 
+    params:
+        cores = "--multicore 4",
+        protocol = config["protocol"],
+        buffer = "4G",
+        ignore_r1 = "" if config["ignore_r1"] == 0 else "--ignore " + str(config["ignore_r1"]),
+        ignore_r2 = "" if config["ignore_r2"] == 0 else "--ignore_r2 " + str(config["ignore_r2"])
+    log:
+        "{outdir}/log/{sample_id}/extraction.txt"
+    shell:
+        """         
+        bismark_methylation_extractor {params.cores} {params.ignore_r1} {params.ignore_r2} --no_overlap --gzip --bedgraph --buffer_size {params.buffer} -o {wildcards.outdir}/methylation/{wildcards.sample_id} {input.bam} > {log} 2>&1
+        [ -f {output.bedgraph} ] || ln -s ${{PWD}}/{wildcards.outdir}/methylation/{wildcards.sample_id}/{wildcards.sample_id}.deduplicated.bedGraph.gz ${{PWD}}/{output.bedgraph}
+        
+        #ln -s {wildcards.outdir}/methylation//{wildcards.sample_id}/{wildcards.sample_id}.deduplicated.M-bias.txt {wildcards.outdir}/log/{wildcards.sample_id}/{wildcards.sample_id}.deduplicated.M-bias.txt
+        #ln -s {wildcards.outdir}/methylation//{wildcards.sample_id}/{wildcards.sample_id}.deduplicated_splitting_report.txt {wildcards.outdir}/log/{wildcards.sample_id}/{wildcards.sample_id}.deduplicated_splitting_report.txt
+        """

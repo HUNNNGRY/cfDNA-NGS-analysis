@@ -1,5 +1,6 @@
-name: cfDNA_base
+name: BS 
 channels:
+  - eugene_t
   - bioconda
   - r
   - conda-forge
@@ -9,8 +10,17 @@ channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
 dependencies:
-  - snakemake=7.6.1
-  - tabulate=0.8.10
+  - fastqc=0.11.9
+  - fastp=0.23.2
+  - bismark=0.23.0
+  - umi_tools=1.1.2
+  - gatk4=4.2.0.0
+  - subread=1.6.2
+  - wisecondorx
+  - deeptools=3.5.0
+  - samtools=1.12
+  - bedtools=2.30.0
+  - snakemake
   - python=3.9.2
   - pip==21.2.4
   - pip:
@@ -18,3 +28,4 @@ dependencies:
     - pandas
   - r-base=3.6.3
   - r-argparse=2.0.3
+  - bioconductor-edger=3.28.0

@@ -1,0 +1,9 @@
+name: background
+channels:
+  - conda-forge
+  - bioconda                                                      
+dependencies:
+  - bedtools
+  - python=3.8
+  - bwa
+  - samtools

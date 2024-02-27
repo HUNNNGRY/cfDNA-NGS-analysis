@@ -1,7 +1,6 @@
-name: cfDNA_base
+name: DNA_SV_manta 
 channels:
   - bioconda
-  - r
   - conda-forge
   - defaults
   - https://conda.anaconda.org/IBMDecisionOptimization/linux-64
@@ -9,12 +8,5 @@ channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
 dependencies:
-  - snakemake=7.6.1
-  - tabulate=0.8.10
-  - python=3.9.2
-  - pip==21.2.4
-  - pip:
-    - numpy
-    - pandas
-  - r-base=3.6.3
-  - r-argparse=2.0.3
+  - python
+  - manta=1.6.0

@@ -1,0 +1,12 @@
+dataset: test
+#adaptor1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+#adaptor2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+wig_binsize: 30
+medips_binsize: 300
+#cal_saturation: false
+onlykeep_properpair: False
+dedup: True
+bowtie2_threads: 8
+insertion_min: 20
+insertion_max: 500
+count_regions: promoter150TSS50,promoter300exon1end100,promoter,promoter5k,promoter1kbTSS,gene,gene_exon1,CpG_island,CDS,UTR3,UTR5,LINE,SINE,retroposon,enhancer_pred

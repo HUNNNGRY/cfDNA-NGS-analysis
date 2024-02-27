@@ -1,0 +1,254 @@
+shell.prefix('set -x; set -e;')
+
+regions = config["count_regions"].strip().split(",")
+sample_ids = open("data/{}/meta_data/sample_ids.txt".format(config["dataset"])).read().strip().split("\n")
+indir = "data/{}/fastq".format(config["dataset"])
+outdir = "output/{}".format(config["dataset"])
+dataset = "{}".format(config["dataset"])
+bam_dir = outdir+"/02bam" if not config["dedup"] else outdir+"/04bam_dedup"
+
+def request(config,outdir,sample_ids):
+    output = dict()
+    if config["dedup"]:
+        output["bam"] = expand("{outdir}/04bam_dedup/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+    else:
+        output["bam"] = expand("{outdir}/02bam/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+    output["bigwig"] = expand("{outdir}/05wig/{sample_id}.bigwig",outdir=outdir,sample_id=sample_ids),
+    output["medips_sature"] = expand("{outdir}/06medips_qc/saturation/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+    output["medips_enrich"] = expand("{outdir}/06medips_qc/enrich/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+    output["summary"] = expand("{outdir}/06medips_qc/quality-control.txt",outdir=outdir),
+    output["count_matrix"] = expand(outdir+"/matrix/count_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+    output["count_matrix_sum"] = expand(outdir+"/matrix/count_matrix_{region}.txt.summary",sample_id=sample_ids,region=regions),
+    #output["TPM_matrix"] = expand(outdir+"/matrix/TPM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+    output["CPM_matrix"] = expand(outdir+"/matrix/CPM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+    output["CPM_TMM_matrix"] = expand(outdir+"/matrix/CPM-TMM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+
+    return list(output.values())
+
+rule all:
+    input:request(config,outdir,sample_ids)
+
+
+rule fastp:
+    input:
+        mate1=indir+'/{sample_id}_1.fastq.gz',
+        mate2=indir+'/{sample_id}_2.fastq.gz'
+    output:
+        fastq1='{outdir}/01fastp/{sample_id}_1.fastq.gz',
+        fastq2='{outdir}/01fastp/{sample_id}_2.fastq.gz',
+        html='{outdir}/01fastp/log/{sample_id}_fastp.html',
+        json='{outdir}/01fastp/log/{sample_id}_fastp.json'
+    log:
+        '{outdir}/01fastp/log/{sample_id}_fastp.log'
+    threads:
+        config["bowtie2_threads"]
+    shell:
+        """
+        fastp --thread {threads} -i {input.mate1} -I {input.mate2} \
+            -o {output.fastq1} -O {output.fastq2} \
+            -h {output.html} -j {output.json} \
+            > {log} 2>&1
+        """
+
+
+rule map_lambda:
+    input:
+        fastq1=outdir+'/01fastp/{sample_id}_1.fastq.gz',
+        fastq2=outdir+'/01fastp/{sample_id}_2.fastq.gz',
+        index='ref/lambda_spikein/lambda_spikein.1.bt2'
+    log:
+        '{outdir}/02bam/log/{sample_id}_nolambda_bowtie2.log'
+    params:
+        unmapped_path='{outdir}/unmapped/{sample_id}_nolambda_%.fastq.gz',
+        index='ref/lambda_spikein/lambda_spikein'
+    output:
+        bam='{outdir}/unmapped/{sample_id}_lambda.bam',
+        unmapped1=temp('{outdir}/unmapped/{sample_id}_nolambda_1.fastq.gz'),
+        unmapped2=temp('{outdir}/unmapped/{sample_id}_nolambda_2.fastq.gz')
+    threads:
+        config["bowtie2_threads"]
+    shell:
+        """
+        bowtie2 -p {threads} -1 {input.fastq1} -2 {input.fastq2} \
+            --no-unal --un-conc-gz {params.unmapped_path} -x {params.index} 2> {log} | \
+            samtools view -b | samtools sort -m 256M -@ {threads} > {output.bam}
+        """
+
+rule map_hg38:
+    input:
+        fastq1=outdir+'/unmapped/{sample_id}_nolambda_1.fastq.gz',
+        fastq2=outdir+'/unmapped/{sample_id}_nolambda_2.fastq.gz',
+        index='ref/hg38/genome.1.bt2'
+    log:
+        '{outdir}/02bam/log/{sample_id}_bowtie2.log'
+    params:
+        unmapped_path='{outdir}/unmapped/{sample_id}_%.fastq.gz',
+        index='ref/hg38/genome'
+    output:
+        bam='{outdir}/02bam/{sample_id}.bam',
+        unmapped1='{outdir}/unmapped/{sample_id}_1.fastq.gz',
+        unmapped2='{outdir}/unmapped/{sample_id}_2.fastq.gz'
+    threads:
+        config["bowtie2_threads"]
+    shell:
+        """
+        #align&sort
+        bowtie2 -p {threads} -1 {input.fastq1} -2 {input.fastq2} \
+            --no-unal --un-conc-gz {params.unmapped_path} -x {params.index} 2> {log} | \
+            samtools view -b | samtools sort -m 256M -@ {threads} > {output.bam}
+        """
+
+rule bam_filter:
+    input:
+        bam="{outdir}/02bam/{sample_id}.bam"
+    output:
+        bam=temp("{outdir}/03bam_filter/{sample_id}.bam")
+    params:
+        keep_proper_pair="-f 2" if config["onlykeep_properpair"] else "",
+        min_size=config["insertion_min"],
+        max_size=config["insertion_max"]
+    shell:
+        """
+        (samtools view -H {input.bam}; samtools view {params.keep_proper_pair} -F 4 {input.bam} | \
+        awk -v min_size={params.min_size} -v max_size={params.max_size} \
+        '{{if($9>0){{size=$9}}else{{size=-$9}};if(size>=min_size&&size<=max_size){{print $0}}}}') | \
+        samtools view -b > {output.bam}
+        """
+
+rule bam_dedup:
+    input:
+        bam = "{outdir}/03bam_filter/{sample_id}.bam"
+    output:
+        bam = "{outdir}/04bam_dedup/{sample_id}.bam",
+        bai = "{outdir}/04bam_dedup/{sample_id}.bam.bai",
+        metrics = "{outdir}/04bam_dedup/log/{sample_id}_dedup.txt"
+    log:
+        '{outdir}/04bam_dedup/log/{sample_id}_dedup.log'
+    threads:
+        config["bowtie2_threads"]
+    shell:
+        """
+        gatk MarkDuplicates \
+            REMOVE_DUPLICATES=true \
+            ASSUME_SORT_ORDER=coordinate \
+            I={input.bam} \
+            O={output.bam} \
+            M={output.metrics} \
+            > {log} 2>&1
+            
+        samtools index -@ {threads} {output.bam}
+        """
+
+rule wig:
+    input:
+        bam = "{outdir}/02bam/{sample_id}.bam" if not config["dedup"] else "{outdir}/04bam_dedup/{sample_id}.bam",
+        bai = "{outdir}/02bam/{sample_id}.bam.bai" if not config["dedup"] else "{outdir}/04bam_dedup/{sample_id}.bam.bai"
+    output:
+        bigwig = "{outdir}/05wig/{sample_id}.bigwig"
+    threads:
+        config["bowtie2_threads"]
+    params:
+        binsize = config["wig_binsize"]
+    shell:
+        """
+        bamCoverage --numberOfProcessors {threads} --extendReads --normalizeUsing CPM -b {input.bam} -o {output.bigwig}
+        """
+        
+rule medips_qc:
+    input:
+        bam = "{outdir}/02bam/{sample_id}.bam" if not config["dedup"] else "{outdir}/04bam_dedup/{sample_id}.bam"
+    output:
+        saturation_qc = "{outdir}/06medips_qc/saturation/{sample_id}.txt",
+        enrich_qc = "{outdir}/06medips_qc/enrich/{sample_id}.txt",
+        coverage = "{outdir}/06medips_qc/coverage/{sample_id}.png"
+    conda:
+        "envs/r35.yml"
+    log:
+        '{outdir}/06medips_qc/log/{sample_id}_medipsqc.log'
+    params:
+        #qcdir = "{outdir}/06medips_qc"
+        binsize = config["medips_binsize"]
+    shell:
+        """
+        Rscript scripts/medips_qc.R -i {input.bam} -w {params.binsize} -sr {output.saturation_qc} -er {output.enrich_qc} -cr {output.coverage} \
+        > {log} 2>&1
+        """
+
+rule summary_qc:
+    input:
+        enrichments = expand("{outdir}/06medips_qc/enrich/{sample_id}.txt",outdir=[outdir],sample_id=sample_ids),
+        saturations = expand("{outdir}/06medips_qc/saturation/{sample_id}.txt",outdir=[outdir],sample_id=sample_ids),
+        coverage = expand("{outdir}/06medips_qc/coverage/{sample_id}.png",outdir=[outdir],sample_id=sample_ids)
+    output:
+        summary = "{outdir}/06medips_qc/quality-control.txt"
+    run:
+        import pandas as pd
+        sample_ids = [path.split("/")[-1].split(".")[0] for path in input.enrichments]
+        records = []
+        for sample_id in sample_ids:
+            enrichment_path = wildcards.outdir + "/06medips_qc/enrich/{}.txt".format(sample_id)
+            with open(enrichment_path) as f:
+                for line in f:
+                    key,value = line.strip().split("\t")
+                    if key == "enrichment.score.relH":
+                        relH = value
+                    elif key == "enrichment.score.GoGe":
+                        GoGe = value
+            saturation_path = wildcards.outdir + "/06medips_qc/saturation/{}.txt".format(sample_id)
+            sat_df = pd.read_csv(saturation_path,sep="\t")
+            es_sat_df = sat_df[sat_df["data"]=="estimated"]
+            estimated_saturation = es_sat_df.sort_values(by="subset")["correlation"].iloc[-1]
+            ob_sat_df = sat_df[sat_df["data"]=="observed"]
+            observed_saturation = ob_sat_df.sort_values(by="subset")["correlation"].iloc[-1]
+            records.append((sample_id,relH,GoGe,estimated_saturation,observed_saturation))
+        table = pd.DataFrame.from_records(records)
+        table.columns = ["sample_id","enrichment.score.relH","enrichment.score.GoGe","estimated.max.saturation","observed.max.saturation"]
+        table.to_csv(output.summary,sep="\t",index=False)
+
+
+# get count matrix
+rule count_matrix_gene:
+    input:
+        bam=expand(bam_dir+"/{sample_id}.bam",sample_id=sample_ids,region=regions)
+    output:
+        gene_matrix=outdir+"/matrix/count_matrix_{region}.txt",
+        gene_sum=outdir+"/matrix/count_matrix_{region}.txt.summary",
+        #gene_TPM=outdir+"/matrix/TPM_matrix_{region}.txt",
+        gene_CPM=outdir+"/matrix/CPM_matrix_{region}.txt",
+        gene_CPM_TMM=outdir+"/matrix/CPM-TMM_matrix_{region}.txt"
+    log:
+        log1=outdir+"/matrix/log/count_matrix_{region}.log",
+        CPM=outdir+"/matrix/log/CPM_matrix_{region}.log",
+        CPM_TMM=outdir+"/matrix/log/CPM-TMM_matrix_{region}.log",
+        #TPM=outdir+"/matrix/log/TPM_matrix_{region}.log",
+    threads:
+        20
+    params:
+        bam=bam_dir+"/*.bam",
+        tmp=outdir+"/matrix/tmp",
+        region="{region}",
+        gtf1="ref/gtf/{region}.gtf"
+    shell:
+        """
+        featureCounts -T {threads} -O -t {params.region} -g gene_id -M -p  \
+            -a {params.gtf1} \
+            -o {output.gene_matrix} {params.bam} \
+            > {log.log1} 2>&1
+
+        Rscript scripts/multiFeatureCounts2countMat.R   \
+            -i {output.gene_matrix}  \
+            -o {params.tmp} ;
+        mv {params.tmp} {output.gene_matrix};
+
+        Rscript scripts/run-NormCountMat.R \
+            -i {output.gene_matrix} \
+            -o {output.gene_CPM} \
+            -m none \
+            > {log.CPM} 2>&1
+
+        Rscript scripts/run-NormCountMat.R \
+            -i {output.gene_matrix} \
+            -o {output.gene_CPM_TMM} \
+            -m TMM \
+            > {log.CPM_TMM} 2>&1
+        """ 

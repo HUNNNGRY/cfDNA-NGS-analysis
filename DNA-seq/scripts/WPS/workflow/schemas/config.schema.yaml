@@ -1,0 +1,29 @@
+$schema: "http://json-schema.org/draft-04/schema#"
+
+description: snakemake configuration file
+
+type: object
+
+# possible entries of the config file and which type they should be
+properties:
+  samples:
+    type: string
+  regions:
+    type: string
+  minRL: 
+    type: integer
+  maxRL: 
+    type: integer
+  bpProtection:
+    type: integer
+  proteinAtlas:
+    type: string
+    enum: ["Blood", "Tissue", "Extended"]
+    description: Type of ProteinAtlas to use. Blood=BloodAtlas, Tissue=ProteinAtlas, Extended=Tissue+cell-lines
+# entries that have to be in the config file for successful validation
+required:
+  - samples
+  - regions
+  - minRL
+  - maxRL
+  - bpProtection

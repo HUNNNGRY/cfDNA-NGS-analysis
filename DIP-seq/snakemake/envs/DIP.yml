@@ -1,5 +1,6 @@
-name: cfDNA_base
+name: DIP 
 channels:
+  - eugene_t
   - bioconda
   - r
   - conda-forge
@@ -9,8 +10,14 @@ channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
 dependencies:
-  - snakemake=7.6.1
-  - tabulate=0.8.10
+  - fastp=0.23.2
+  - bowtie2=2.3.5
+  - gatk4=4.2.0.0
+  - subread=1.6.2
+  - deeptools=3.5.0
+  - samtools=1.12
+  - bedtools=2.30.0
+  - snakemake
   - python=3.9.2
   - pip==21.2.4
   - pip:
@@ -18,3 +25,12 @@ dependencies:
     - pandas
   - r-base=3.6.3
   - r-argparse=2.0.3
+  - bioconductor-medips=1.38.0
+  - bioconductor-bsgenome=1.54.0
+  - bioconductor-bsgenome.hsapiens.ucsc.hg38
+  - bioconductor-edger=3.28.0
+
+#  - python=3.9.2
+#  #  - r-base=3.6.3
+#  #  - samtools=1.15.1
+#  #  - manta=1.6.0

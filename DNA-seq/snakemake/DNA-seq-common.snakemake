@@ -1,0 +1,163 @@
+import pandas as pd
+
+cnv_binsize=str(config["cnv_binsize"])
+wig_binsize=config["wig_binsize"]
+regions=config["count_regions"].strip().split(",")
+# sample_ids=open("data/{}/meta_data/sample_ids.txt".format(config["dataset"])).read().strip().split("\n")
+sample_tab=pd.read_table("data/{}/meta_data/sample_table.txt".format(config["dataset"]))
+# validate(sample_tab, schema="../schemas/sample_tab.schema.yaml")
+sample_ids=sample_tab["sample"].unique().tolist()
+sample_ids2="{"+",".join(sample_ids)+"}"
+ref_sample_ids=sample_tab.loc[sample_tab["group"]==config["ref_group"],"sample"]
+treat_sample_ids=sample_tab.loc[sample_tab["group"]!=config["ref_group"],"sample"]
+
+#ref_sample_ids=sample_tab.loc[sample_tab["ref_sample"]=="Y","sample"].unique().tolist()
+
+indir="data/{}/fastq".format(config["dataset"])
+outdir="output/{}".format(config["dataset"])
+dataset="{}".format(config["dataset"])
+gn_size=config['gn_size']
+
+#usual bam dir
+bam_dir=outdir+"/bam" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped"
+
+#bam dir with correction
+RG_dir=outdir+"/bam-sorted-RG" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped-RG"
+BQSR_dir=outdir+"/bam-sorted-RG-BQSR" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped-RG-BQSR"
+GC_dir=outdir+"/bam-sorted-RG-correctGC" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped-RG-correctGC"
+
+#tools dir/path
+tmp_dir=config["tmp_dir"]
+gn_dir=config["gn_dir"]
+gtf_dir=config["gtf_dir"]
+trim_galore_path=config['trim_galore_path']
+#bwa_dir=config['bwa_dir']
+bwa_index_prefix=config['bwa_index_prefix']
+#gn_fa_path=config['gn_fa_path']
+#gn_2bit_path=config['gn_2bit_path']
+#gn_blacklist_path=config['gn_blacklist_path']
+SNP_dir=config['SNP_dir']
+# dbSNP_path=config['dbSNP_path']
+# gnomad_path=config['gnomad_path']
+# genome1k_path=config['genome1k_path']
+kraken2db_dir=config['kraken2db_dir']
+
+# def request(config,outdir,sample_ids):
+#     output=dict()
+#     # output["qc0"]=expand(outdir+"/qc0/{sample_id}/{sample_id}_1_fastqc.html",outdir=outdir,sample_id=sample_ids)
+#     # output["qc1"]=expand(outdir+"/qc1/{sample_id}/{sample_id}_1_fastqc.html",outdir=outdir,sample_id=sample_ids)
+#     if config["remove_duplications"]: 
+#         output["bam"]=expand(outdir+"/bam-sorted-deduped/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+#     else:
+#         output["bam"]=expand(outdir+"/bam/{sample_id}.bam",outdir=outdir,sample_id=sample_ids)
+#     output["bigwig"]=expand(outdir+"/wig/{sample_id}.bigwig",outdir=outdir,sample_id=sample_ids),
+    
+#     ## feature output & matrix
+#     if config["SNV"]: 
+#         output["SNV"]=expand(outdir+"/vcf-filtered/{sample_id}.vcf.gz",outdir=outdir,sample_id=sample_ids),
+#         if config["BQSR"]:
+#             output["BQSR"]=expand(BQSR_dir+"/{sample_id}.bam",sample_id=sample_ids), 
+#     if config["CNV_coverage"]: 
+#         #CNV option1
+#         output["CNV"]=expand(outdir+"/segment-coverage/{sample_id}.bed",outdir=outdir,sample_id=sample_ids),
+#     if config["CNV_WisecondorX"]: 
+#         #CNV option2
+#         output["wisecondorx_cnv"]=expand(outdir+"/wisecondorx/CNV/"+cnv_binsize+"/{sample_id}_segments.bed",outdir=outdir,sample_id=sample_ids),
+#         #output["wisecondorx_ref"]=expand(outdir+"/wisecondorx/ref/reference_nipt_"+config["cnv_binsize"]+".npz",outdir=outdir,sample_id=sample_ids),
+#         output["wisecondorx_gene_log2ratio"]=outdir+"/matrix/CNVlog2ratio_matrix_gene.txt",
+#         output["wisecondorx_gene_zscore"]=outdir+"/matrix/CNVzscore_matrix_gene.txt", 
+#     if config["CNV_CNVkit"]: 
+#         #CNV option3
+#         output["CNVkit_cnr"]=expand(outdir+"/CNVkit/CNV/"+cnv_binsize+"/{sample_id}.cnr",outdir=outdir,sample_id=sample_ids),
+#         output["CNVkit_cns"]=expand(outdir+"/CNVkit/CNV/"+cnv_binsize+"/{sample_id}.cns",outdir=outdir,sample_id=sample_ids),
+
+#     if config["correct_GC"]:
+#         output["correct_GC"]=expand(GC_dir+"/{sample_id}.bam",sample_id=sample_ids), 
+#     if config["SV_manta"]: 
+#         output["SV_manta"]=expand(outdir+"/struatural-variation/{sample_id}/results/variants/candidateSV.vcf.gz",outdir=outdir,sample_id=sample_ids),    
+#     output["fragsize"]=expand(outdir+"/fragment-length/histogram.txt",outdir=outdir),
+#     output["count_matrix"]=expand(outdir+"/matrix/count_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+#     output["count_matrix_log"]=expand(outdir+"/matrix/count_matrix_{region}.txt.summary",sample_id=sample_ids,region=regions),
+#     #output["TPM_matrix"]=expand(outdir+"/matrix/TPM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+#     # output["CPM_matrix"]=expand(outdir+"/matrix/CPM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+#     output["CPM_TMM_matrix"]=expand(outdir+"/matrix/CPM-TMM_matrix_{region}.txt",sample_id=sample_ids,region=regions),
+
+#     ## summary stats
+#     output["firstAlignmentSummary"]=expand(outdir+"/firstAlignmentSummary/{sample_id}.AlignmentSummaryMetrics.txt",outdir=outdir,sample_id=sample_ids),
+#     output["stat"]=expand(outdir+"/stats/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+#     output["flagstat"]=expand(outdir+"/flagstat/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+# #    output["depth"]=expand(outdir+"/stats/coverage_depth.txt",outdir=outdir),
+#     output["wgs_qc"]=expand(outdir+"/wgs_qc/quality-control.txt",outdir=outdir),
+#     if config["microbe"]: 
+#         output["microbe"]=expand(outdir+"/microbe/report/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+
+#     return list(output.values())
+
+
+
+
+
+# get masked genomic regions (remove rmsk and/or blacklit)
+rule maskGnRegions:
+    input:
+        chromsize=gn_dir+"/chrom.size",
+        rmsk=gn_dir+"/rmsk.bed",
+        blacklist=gn_dir+"/hg38_blacklist.bed"
+    output:
+        binbed=gn_dir+"/hg38.bins."+cnv_binsize+".bed",
+        binbed_normsk=gn_dir+"/hg38.bins."+cnv_binsize+".norepeats.bed",
+        binbed_normsk_noblacklist=gn_dir+"/hg38.bins."+cnv_binsize+".norepeats.noblacklist.bed",
+    conda:
+        "envs/DNA.yml"
+    params:
+        bs=int(cnv_binsize),
+    log: 
+        outdir+"/log/buildMaskGnRegions.log"
+    shell:
+        """
+        bedtools makewindows -g {input.chromsize} -w {params.bs} > {output.binbed}
+        bedtools subtract -a {output.binbed} -b {input.rmsk} > {output.binbed_normsk}
+        bedtools subtract -a {output.binbed_normsk} -b {input.blacklist} > {output.binbed_normsk_noblacklist}
+        """
+# for i in 300 3000 10000 100000
+# do echo $i
+#     bedtools makewindows -g genome/chrom.size -w ${i} > genome/hg38.bins.${i}.bed
+#     bedtools subtract -a genome/hg38.bins.${i}.bed -b genome/rmsk.bed > genome/hg38.bins.${i}.norepeats.bed
+#     bedtools subtract -a genome/hg38.bins.${i}.norepeats.bed -b genome/hg38_blacklist.bed > genome/hg38.bins.${i}.norepeats.noblacklist.bed
+#     touch -r genome/archive/hg38.bins.300.bed genome/hg38.bins.${i}.bed 
+#     touch -r genome/archive/hg38.bins.300.bed genome/hg38.bins.${i}.norepeats.bed 
+#     touch -r genome/archive/hg38.bins.300.bed genome/hg38.bins.${i}.norepeats.noblacklist.bed
+# done
+
+
+### TODO:
+
+# # create snakemake rule to convert gtf to bed
+# rule gtf2bed:
+#     input:
+#         gtf=gtf_dir+"/gencode.v38.annotation.gtf"
+#     output:
+#         bed=gtf_dir+"/gencode.v38.annotation.bed"
+#     conda:
+#         "envs/DNA.yml"
+#     shell:
+#         """
+#         bin/gtf2bed < {input.gtf} > {output.bed}
+#         """
+
+
+# # create snakemake rule to build bwa-mem2 index
+# rule bwa_index:
+#     input:
+#         fa=gn_fa_path
+#     output:
+#         prefix=bwa_index_prefix
+#     conda:
+#         "envs/DNA.yml"
+#     shell:
+#         """
+#         bwa-mem2 index {input.fa} -p {output.prefix}
+#         """
+
+# # create standard kraken2 database
+#....

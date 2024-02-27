@@ -1,0 +1,16 @@
+restart-times: 3
+jobscript: "slurm-jobscript.sh"
+cluster: "slurm-submit.py"
+cluster-status: "slurm-status.py"
+max-jobs-per-second: 1
+max-status-checks-per-second: 10
+local-cores: 1
+latency-wait: 60
+
+# add paras from http://bluegenes.github.io/Using-Snakemake_Profiles/
+use-conda: True
+jobs: 10
+keep-going: True
+rerun-incomplete: True
+#shadow-prefix: /scratch/ntpierce
+printshellcmds: True

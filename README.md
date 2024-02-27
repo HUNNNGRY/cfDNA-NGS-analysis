@@ -575,7 +575,8 @@ mavis，STAR-fusion and Manta within snakemake file should both be OK
 #see/BioII/lulab_b/baopengfei/projects/multi-omics-explore/scripts/SV.r
 ```
 
-### 4.4 WPS (Liyu)
+### 4.4 WPS
+(organized by Liyu)
 **Notes**
 - the number of fragments spanning the window minus those with an endpoint within the window 
 - footprints of protein-DNA interactions(such as nucleosome positioning or TF binding) 
@@ -583,6 +584,7 @@ mavis，STAR-fusion and Manta within snakemake file should both be OK
 
 **Steps**
 ```bash
+cd DNA-seq/scripts/WPS
 dst="test" 
 snakemake --rerun-incomplete --keep-going --printshellcmds --reason --use-conda --nolock --latency-wait 80 --restart-times 1 --jobs 100 \
 --snakefile snakefile_WPS.smk \
@@ -610,7 +612,8 @@ e.g.:
 e.g.:
 
 
-### 4.5 NucleosomeFootprint (Liyu)
+### 4.5 NucleosomeFootprint
+(organized by Liyu)
 Calculate (relative) coverage depth at NDR (nucleosome-depleted region) in genes
 - coverage depth of 3 region types can be used as gene-centric measures
   - genebody

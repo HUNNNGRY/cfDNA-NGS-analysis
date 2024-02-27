@@ -1,4 +1,4 @@
-name: cfDNA_base
+name: DNA_CNV_WisecondorX
 channels:
   - bioconda
   - r
@@ -9,12 +9,10 @@ channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
 dependencies:
-  - snakemake=7.6.1
-  - tabulate=0.8.10
+  - bedtools=2.30.0
+  - wisecondorx
   - python=3.9.2
   - pip==21.2.4
   - pip:
     - numpy
     - pandas
-  - r-base=3.6.3
-  - r-argparse=2.0.3

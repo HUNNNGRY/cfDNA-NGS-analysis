@@ -1,0 +1,5 @@
+ID	sample	path	ref_samples	genome_build	status
+experimentID	CRC-10	"/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/output/lulab/bam-sorted-deduped/CRC-PKU-10-wgs.bam"	NC-10,NC-12	GRCh38	CRC
+experimentID	CRC-12	"/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/output/lulab/bam-sorted-deduped/CRC-PKU-12-wgs.bam"	NC-10,NC-12	GRCh38	CRC
+experimentID	NC-10	"/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/output/lulab/bam-sorted-deduped/NC-PKU-10-wgs.bam"	NC-10,NC-12	GRCh38	NC
+experimentID	NC-12	"/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq/output/lulab/bam-sorted-deduped/NC-PKU-12-wgs.bam"	NC-10,NC-12	GRCh38	NC

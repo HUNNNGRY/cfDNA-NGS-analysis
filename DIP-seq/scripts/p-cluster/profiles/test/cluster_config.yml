@@ -1,0 +1,8 @@
+__default__:
+    account: baopengfei # your hpc account
+    partition: CN_BIOT # the partition you use
+    #mail-user: ntpierce@ucdavis.edu # your email (optional!)
+    #time: 360 # default time (minutes)
+    #nodes: 1
+    #ntasks: 1
+    #mem: 14GB # default memory

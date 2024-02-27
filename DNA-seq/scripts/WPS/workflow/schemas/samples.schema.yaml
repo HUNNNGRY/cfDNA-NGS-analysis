@@ -1,0 +1,38 @@
+$schema: "http://json-schema.org/draft-04/schema#"
+
+description: an entry in the sample sheet
+
+# columns that the config/samples.tsv file can have and which type they should be
+properties:
+  ID:
+    type: string
+    description: experiment ID
+  sample:
+    type: string
+    description: sample name/identifier
+  path:
+    type: string
+    description: path to sample input file (e.g. sample.bam)
+  ref_samples:
+    type: string
+    description: reference samples contained in samples.tsv; multiple samples comma separated
+  genome_build:
+    type: string
+    enum: ["GRCh37", "GRCh38"]
+  status:
+    type: string
+    description: optional filed for storing sample status (e.g. healthy,disease). can be used to label/group certain samples.
+  libType:
+    type: string
+    description: RNA-seq libType (reverse or forward).
+  info:
+    type: string
+    description: contains additional, human readable info
+# columns that the config/samples.tsv file must have to pass schema validation
+required:
+  - ID
+  - sample
+  - path
+  - ref_samples
+  - genome_build
+  - libType

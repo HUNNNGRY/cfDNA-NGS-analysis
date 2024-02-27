@@ -1,0 +1,61 @@
+{
+    "__default__":
+    {
+        "jobname": "{rule}-{wildcards}",
+        "queue": "Acluster",
+        "threads": "1",
+        "resources": "span[hosts=1] -R select[hname!=node1u07] ",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards}.err"
+    },
+    "add_flanks":
+    {
+        "jobname": "{rule}-{wildcards.target_region}",
+        "queue": "Acluster",
+        "threads": "1",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.err"
+    },
+    "get_backgroundFlank":
+    {
+        "jobname": "{rule}-{wildcards.target_region}",
+        "queue": "Acluster",
+        "threads": "1",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.err"
+    },
+    "exclude_blacklist":
+    {
+        "jobname": "{rule}-{wildcards.target_region}",
+        "queue": "Acluster",
+        "threads": "1",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.err"
+    },
+    "generate_random_background":
+    {
+        "jobname": "{rule}-{wildcards.target_region}",
+        "queue": "Acluster",
+        "threads": "1",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}.err"
+    },
+    "extract_counts":
+    {
+        "jobname": "{rule}-{wildcards.target_region}-{wildcards.SAMPLE}",
+        "queue": "Acluster",
+        "threads": "1",
+        "resources": "span[hosts=1] -R select[hname!=node1u01] ",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}-{wildcards.SAMPLE}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}-{wildcards.SAMPLE}.err"
+    },
+    "extract_counts_backgroundFlank":
+    {
+        "jobname": "{rule}-{wildcards.target_region}-{wildcards.SAMPLE}",
+        "queue": "Acluster",
+        "threads": "1",
+        "resources": "span[hosts=1] -R select[hname!=node1u01] ",
+        "output": "log/{wildcards.ID}/{rule}-{wildcards.target_region}-{wildcards.SAMPLE}.out",
+        "error": "log/{wildcards.ID}/{rule}-{wildcards.target_region}-{wildcards.SAMPLE}.err"
+    }
+}

@@ -1,0 +1,137 @@
+shell.prefix("set -x; set -e;")
+include: 'DNA-seq-common.snakemake'
+
+
+################################################################
+# Frag Size Ratio (gene-based) (2019 Nature DELFI)
+################################################################
+### get short&long bam
+rule prepareShortLongBamGene:
+    input:
+        bam=bam_dir+"/{sample_id}.bam" if config["BQSR"] else "{outdir}/bam-sorted-deduped/{sample_id}.bam", 
+        # reference="genome/fasta/hg38.fa"
+    output:
+        shortBam=tmp_dir+"/{sample_id}-short.bam",
+        longBam=tmp_dir+"/{sample_id}-long.bam",
+    # log: "{outdir}/log/{sample_id}/prepareShortLongBam.log"
+    conda:
+        'envs/DNA_FragSize.yml'
+    shell:
+        """
+        bash scripts/frag/get-FragmentSizeBam.sh \
+            {wildcards.sample_id} \
+            {input.bam} \
+            {tmp_dir}
+        """
+
+
+### count short bam
+rule count_short_matrix_gene:
+    input:
+        bam=expand("{tmp_dir}/{sample_id}-short.bam",sample_id=sample_ids,tmp_dir=tmp_dir),
+    output:
+        gene_matrix=outdir+"/matrix/count_matrix_gene_short.txt",
+        gene_sum=outdir+"/matrix/count_matrix_gene_short.txt.summary",
+        gene_matrix_correctGC=outdir+"/matrix/count_matrix_gene_short.correctGC.txt",
+        gene_CPM_TMM=outdir+"/matrix/CPM-TMM_matrix_gene_short.correctGC.txt"
+    log:
+        log1=outdir+"/matrix/log/count_matrix_gene_short.log",
+        CPM_TMM=outdir+"/matrix/log/CPM-TMM_matrix_gene_short.log",
+    conda:
+        "envs/DNA_FragSize.yml"
+    threads: 8
+    params:
+        bam=tmp_dir+"/{"+",".join(sample_ids)+"}-short.bam",
+        tmp=outdir+"/matrix/tmp_gene_short",
+        region="gene",
+        gtf1=gtf_dir+"/gene.gtf",
+        bed1=gtf_dir+"/gene.bed"
+    shell:
+        """
+        featureCounts -T 4 -O -t {params.region} -g gene_id -M -p \
+            -a {params.gtf1} \
+            -o {output.gene_matrix} {params.bam} \
+            > {log.log1} 2>&1
+        
+        Rscript scripts/multiFeatureCounts2countMat.R \
+            -i {output.gene_matrix}  \
+            -o {params.tmp} ;
+        mv {params.tmp} {output.gene_matrix};
+
+        # correctGC before count normalize
+        Rscript scripts/run-correctGC.R \
+            --matrix {output.gene_matrix} \
+            --bed {params.bed1} \
+            --outfile {output.gene_matrix_correctGC}
+
+        Rscript scripts/run-NormCountMat.R \
+            -i {output.gene_matrix_correctGC} \
+            -o {output.gene_CPM_TMM} \
+            -m TMM \
+            > {log.CPM_TMM} 2>&1
+        """ 
+
+### count long bam
+rule count_long_matrix_gene:
+    input:
+        bam=expand("{tmp_dir}/{sample_id}-long.bam",sample_id=sample_ids,tmp_dir=tmp_dir),
+    output:
+        gene_matrix=outdir+"/matrix/count_matrix_gene_long.txt",
+        gene_sum=outdir+"/matrix/count_matrix_gene_long.txt.summary",
+        gene_matrix_correctGC=outdir+"/matrix/count_matrix_gene_long.correctGC.txt",
+        gene_CPM_TMM=outdir+"/matrix/CPM-TMM_matrix_gene_long.correctGC.txt"
+    log:
+        log1=outdir+"/matrix/log/count_matrix_gene_long.log",
+        CPM_TMM=outdir+"/matrix/log/CPM-TMM_matrix_gene_long.log",
+    conda:
+        "envs/DNA_FragSize.yml"
+    threads: 8
+    params:
+        bam=tmp_dir+"/{"+",".join(sample_ids)+"}-long.bam",
+        tmp=outdir+"/matrix/tmp_gene_long",
+        region="gene",
+        gtf1=gtf_dir+"/gene.gtf",
+        bed1=gtf_dir+"/gene.bed"
+    shell:
+        """
+        featureCounts -T 4 -O -t {params.region} -g gene_id -M -p \
+            -a {params.gtf1} \
+            -o {output.gene_matrix} {params.bam} \
+            > {log.log1} 2>&1
+        
+        Rscript scripts/multiFeatureCounts2countMat.R \
+            -i {output.gene_matrix}  \
+            -o {params.tmp} ;
+        mv {params.tmp} {output.gene_matrix};
+
+        # correctGC before count normalize
+        Rscript DNA-seq/scripts/run-correctGC.R \
+            --matrix {output.gene_matrix} \
+            --bed {params.bed1} \
+            --outfile {output.gene_matrix_correctGC}
+
+        Rscript scripts/run-NormCountMat.R \
+            -i {output.gene_matrix_correctGC} \
+            -o {output.gene_CPM_TMM} \
+            -m TMM \
+            > {log.CPM_TMM} 2>&1
+        """ 
+
+### cal FragSize ratio from correctGC CPM matrix
+rule calFragSizeRatio:
+    input:
+        shortMat=outdir+"/matrix/CPM-TMM_matrix_gene_short.correctGC.txt",
+        longMat=outdir+"/matrix/CPM-TMM_matrix_gene_long.correctGC.txt"
+    output:
+        outdir+"/matrix/DNA-FragRatio_matrix_gene.txt",
+    log: outdir+"/matrix/log/calFragSizeRatio.log"
+    conda:
+        "envs/DNA_FragSize.yml"
+    threads: 8
+    shell:
+        """
+        Rscript scripts/frag/get-FragSizeMat.R \
+            --short {input.shortMat} \
+            --long {input.longMat} \
+            --outfile {output} > {log} 2>&1
+        """

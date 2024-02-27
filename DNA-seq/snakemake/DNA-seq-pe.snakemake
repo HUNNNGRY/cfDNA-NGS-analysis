@@ -1,0 +1,541 @@
+shell.prefix("set -x; set -e;")
+include: 'DNA-seq-common.snakemake'
+include: 'DNA-seq-pe-SNV.snakemake'
+include: 'DNA-seq-pe-CNV.snakemake'
+include: 'DNA-seq-pe-SV.snakemake'
+include: 'DNA-seq-pe-FragSize.snakemake'
+include: 'DNA-seq-pe-Mb.snakemake'
+
+
+def request():
+    output = dict()
+
+    # QC outputs
+    # output["qc0"] = expand("{outdir}/qc0/{sample_id}/{sample_id}_1_fastqc.html", outdir=outdir, sample_id=sample_ids)
+    # output["qc1"] = expand("{outdir}/qc1/{sample_id}/{sample_id}_1_fastqc.html", outdir=outdir, sample_id=sample_ids)
+
+    # BAM file
+    if config["remove_duplications"]:
+        output["bam"] = expand("{outdir}/bam-sorted-deduped/{sample_id}.bam", outdir=outdir, sample_id=sample_ids)
+    else:
+        output["bam"] = expand("{outdir}/bam/{sample_id}.bam", outdir=outdir, sample_id=sample_ids)
+
+    # BigWig file
+    output["bigwig"] = expand("{outdir}/wig/{sample_id}.bigwig", outdir=outdir, sample_id=sample_ids)
+
+    # Feature output & matrix
+    if config["SNV"]:
+        output["SNV"] = expand("{outdir}/vcf-filtered/{sample_id}.vcf.gz", outdir=outdir, sample_id=sample_ids)
+        if config["BQSR"]:
+            output["BQSR"] = expand("{BQSR_dir}/{sample_id}.bam", BQSR_dir=BQSR_dir, sample_id=sample_ids)
+
+    if config["CNV_coverage"]:
+        # CNV option1
+        output["CNV"] = expand("{outdir}/segment-coverage/{sample_id}.bed", outdir=outdir, sample_id=sample_ids)
+
+    if config["CNV_WisecondorX"]:
+        # CNV option2
+        output["wisecondorx_cnv"] = expand("{outdir}/wisecondorx/CNV/{cnv_binsize}/{sample_id}_segments.bed", outdir=outdir, cnv_binsize=cnv_binsize, sample_id=sample_ids)
+        output["wisecondorx_gene_log2ratio"] = expand("{outdir}/matrix/CNVlog2ratio_matrix_gene.txt", outdir=outdir)
+        output["wisecondorx_gene_zscore"] = expand("{outdir}/matrix/CNVzscore_matrix_gene.txt", outdir=outdir)
+
+    if config["CNV_CNVkit"]:
+        # CNV option3
+        output["CNVkit_cnr"] = expand("{outdir}/CNVkit/CNV/{cnv_binsize}/{sample_id}.cnr", outdir=outdir, cnv_binsize=cnv_binsize, sample_id=sample_ids)
+        output["CNVkit_cns"] = expand("{outdir}/CNVkit/CNV/{cnv_binsize}/{sample_id}.cns", outdir=outdir, cnv_binsize=cnv_binsize, sample_id=sample_ids)
+
+    if config["correct_GC"]:
+        output["correct_GC"] = expand("{GC_dir}/{sample_id}.bam", GC_dir=GC_dir, sample_id=sample_ids)
+
+    if config["SV_manta"]:
+        output["SV_manta"] = expand("{outdir}/struatural-variation/{sample_id}/results/variants/candidateSV.vcf.gz", outdir=outdir, sample_id=sample_ids)
+
+    if config["microbe"]:
+        output["microbe"] = expand("{outdir}/microbe/report/{sample_id}.txt", outdir=outdir, sample_id=sample_ids)
+        
+    output["fragsize"] = expand("{outdir}/fragment-length/histogram.txt", outdir=outdir)
+    output["count_matrix"] = expand("{outdir}/matrix/count_matrix_{region}.txt", outdir=outdir, region=regions)
+    output["count_matrix_log"] = expand("{outdir}/matrix/count_matrix_{region}.txt.summary", outdir=outdir, region=regions)
+    output["CPM_TMM_matrix"] = expand("{outdir}/matrix/CPM-TMM_matrix_{region}.txt", outdir=outdir, region=regions)
+
+    # Summary stats
+    output["firstAlignmentSummary"] = expand("{outdir}/firstAlignmentSummary/{sample_id}.AlignmentSummaryMetrics.txt", outdir=outdir, sample_id=sample_ids)
+    output["stat"] = expand("{outdir}/stats/{sample_id}.txt", outdir=outdir, sample_id=sample_ids)
+    output["flagstat"] = expand("{outdir}/flagstat/{sample_id}.txt", outdir=outdir, sample_id=sample_ids)
+    output["wgs_qc"] = expand("{outdir}/wgs_qc/quality-control.txt", outdir=outdir)
+
+    return list(output.values())
+
+
+rule all:
+    input:request()
+
+# rule qc0: # bug in new A？
+#     input:
+#         fastq1=indir+"/{sample_id}_1.fastq.gz",
+#         fastq2=indir+"/{sample_id}_2.fastq.gz"
+#     output:
+#         report1=outdir+"/qc0/{sample_id}/{sample_id}_1_fastqc.html",
+#         report2=outdir+"/qc0/{sample_id}/{sample_id}_2_fastqc.html"
+#     params:
+#         outdir=outdir+"/qc0/{sample_id}"
+#     threads: 16
+#     conda:
+#         "envs/DNA.yml"
+#     shell:
+#         """
+#         fastqc -t 6 -o {params.outdir} {input.fastq1} 
+#         fastqc -t 6 -o {params.outdir} {input.fastq2}
+#         """
+
+rule trimming:
+    input:
+        fastq1=indir+"/{sample_id}_1.fastq.gz",
+        fastq2=indir+"/{sample_id}_2.fastq.gz"
+    output:
+        fastq1=outdir+"/cutadapt/{sample_id}_1.fastq.gz",
+        fastq2=outdir+"/cutadapt/{sample_id}_2.fastq.gz",
+        report1=outdir+"/log/{sample_id}/trimming_statistics_1.txt",
+        report2=outdir+"/log/{sample_id}/trimming_statistics_2.txt"
+    params:
+        outdir=outdir+"/cutadapt",
+        quality=30 
+    conda:
+        "envs/DNA.yml"
+    threads: 6
+    log:
+        log=outdir+"/log/{sample_id}/trimming.txt"
+    shell:
+        """
+        {trim_galore_path} --phred33 --paired  --cores {threads} --quality {params.quality} \
+            -o {params.outdir} --basename {wildcards.sample_id} {input.fastq1} {input.fastq2} > {log.log} 2>&1
+        mv {params.outdir}/{wildcards.sample_id}_val_1.fq.gz {output.fastq1}
+        mv {params.outdir}/{wildcards.sample_id}_val_2.fq.gz {output.fastq2}
+        mv {params.outdir}/{wildcards.sample_id}_1.fastq.gz_trimming_report.txt {output.report1}
+        mv {params.outdir}/{wildcards.sample_id}_2.fastq.gz_trimming_report.txt {output.report2}
+        """
+
+
+# Quality control after adapter trimming
+rule qc1:
+    input:
+        fastq1=outdir+"/cutadapt/{sample_id}_1.fastq.gz",
+        fastq2=outdir+"/cutadapt/{sample_id}_2.fastq.gz"
+    output:
+        report1=outdir+"/qc1/{sample_id}/{sample_id}_1_fastqc.html",
+        report2=outdir+"/qc1/{sample_id}/{sample_id}_2_fastqc.html"
+    params:
+        outdir=outdir+"/qc1/{sample_id}"
+    conda:
+        "envs/DNA.yml"
+    shell:
+        """
+        fastqc -o {params.outdir} {input.fastq1}
+        fastqc -o {params.outdir} {input.fastq2}
+        """
+
+
+# Mapping with bwa
+rule bwa_alignment:
+    input:
+        fastq1=outdir+"/cutadapt/{sample_id}_1.fastq.gz",
+        fastq2=outdir+"/cutadapt/{sample_id}_2.fastq.gz",
+        # index="genome/bwa-mem2-index/genome.0123" 
+    output:
+        bam=outdir+"/bam/{sample_id}.bam",
+        sam=temp(outdir+"/bam/{sample_id}.sam")
+    params:
+        # index="genome/bwa-mem2-index/genome",
+    conda:
+        "envs/DNA.yml"
+    threads: 8
+    log:
+        outdir+"/log/{sample_id}/bwa-alignment.txt"
+    shell:
+        """
+        bwa-mem2 mem -T 0 -t {threads} {bwa_index_prefix} {input.fastq1} {input.fastq2} -o {output.sam} > {log} 2>&1 
+        samtools view -b {output.sam} > {output.bam}
+        """
+
+# Get unmapped reads from bwa"s bam file
+rule getUnaligned:
+    input:
+        bam=outdir+"/bam/{sample_id}.bam"
+    output:
+        unmapped_1=outdir+"/unmapped/{sample_id}_1.fastq.gz",
+        unmapped_2=outdir+"/unmapped/{sample_id}_2.fastq.gz"
+    conda:
+        "envs/DNA.yml"
+    threads: 4    
+    log:
+        outdir+"/log/{sample_id}/get-unaligned.txt"
+    shell:
+        """
+        samtools fastq -@ {threads} -1 {output.unmapped_1} -2 {output.unmapped_2} -0 /dev/null -s /dev/null -f 13 {input.bam} 2> {log}
+        """
+
+# Generate flag statistics in bam file
+rule flagstat:
+    input:
+        bam=outdir+"/bam/{sample_id}.bam"
+    output:
+        flagstat=outdir+"/flagstat/{sample_id}.txt"
+    conda:
+        "envs/DNA.yml"
+    shell:
+        """
+        samtools flagstat {input.bam} > {output.flagstat}
+        """ 
+
+# sort bam files
+rule sort:
+    input:
+        bam=outdir+"/bam/{sample_id}.bam"
+    output:
+        bam=outdir+"/bam-sorted/{sample_id}.bam",
+        bai=outdir+"/bam-sorted/{sample_id}.bam.bai"
+    params:
+        keep_proper_pair="-f 2" if config["onlykeep_properpair"] else "",
+    conda:
+        "envs/DNA.yml"
+    threads: 4
+    shell:
+        """
+        samtools view -h {params.keep_proper_pair} -F 0x4  {input.bam} | samtools sort  -@ {threads}  > {output.bam}
+        samtools index -@ {threads} {output.bam}
+        """
+
+# remove duplicate reads
+rule dedup:
+    input:
+        bam=outdir+"/bam-sorted/{sample_id}.bam"
+    output:
+        bam=outdir+"/bam-sorted-deduped/{sample_id}.bam",
+        bai=outdir+"/bam-sorted-deduped/{sample_id}.bam.bai",
+        metrics=outdir+"/log/{sample_id}/dedup-metrics.txt"
+    log:
+        outdir+"/log/{sample_id}/MarkDuplicates.log"
+    conda:
+        "envs/DNA.yml"
+    threads: 16
+    shell:
+        """
+        gatk MarkDuplicates \
+            -I {input.bam} -O {output.bam} -M {output.metrics} \
+            --REMOVE_DUPLICATES true --ASSUME_SORT_ORDER coordinate > {log} 2>&1
+        samtools index -@ {threads} {output.bam}
+        """
+
+
+# get bam files with RG (gatk"s baseQualityRecalibration requires this Read Group)
+rule addReadsGroup:
+    input:
+        bam=outdir+"/bam-sorted/{sample_id}.bam" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped/{sample_id}.bam"
+    output:
+        bam=RG_dir+"/{sample_id}.bam",
+        bai=RG_dir+"/{sample_id}.bam.bai"
+    params:
+        id="{sample_id}",
+        java="--java-options -Xmx15G"
+        # tmp_dir=config["tmp_dir"]
+    conda:
+        "envs/DNA.yml"
+    threads: 10        
+    log:
+        log=outdir+"/log/{sample_id}/addReadsGroup.log"
+    shell:
+        """
+        gatk AddOrReplaceReadGroups {params.java} \
+            --TMP_DIR {tmp_dir} --INPUT {input.bam} --OUTPUT {output.bam} \
+            -SO coordinate --RGLB library --RGPL illumina --RGPU HiSeq2000 --RGSM {params.id} > {log.log} 2>&1
+        samtools index -@ {threads} {output.bam}
+        """
+
+## get BQSR bam files (correct single base quality)
+rule baseQualityRecalibration:
+    input:
+        bam=RG_dir+"/{sample_id}.bam",
+        gn_fa_path=gn_dir+"/genome.fa",
+        dbSNP_path=SNP_dir+"/All_20180418.vcf.gz"
+    output: 
+        bam=BQSR_dir+"/{sample_id}.bam",
+        bai=BQSR_dir+"/{sample_id}.bam.bai",
+        grpFile=BQSR_dir+"/BQSR-grp/{sample_id}.grp"
+    conda:
+        "envs/DNA.yml"
+    log:
+        prepareGrp=outdir+"/log/{sample_id}/BaseRecalibrator.log",
+        BQSR=outdir+"/log/{sample_id}/ApplyBQSR.log"
+    threads: 16
+    # params:
+    #     tmp_dir=config['tmp_dir']
+    shell:
+        """
+        gatk BaseRecalibrator \
+            --tmp-dir {tmp_dir} --input {input.bam} --output {output.grpFile} \
+            --known-sites {input.dbSNP_path} --reference {input.gn_fa_path} > {log.prepareGrp} 2>&1
+        gatk ApplyBQSR \
+            --tmp-dir {tmp_dir} -R {input.gn_fa_path} -I {input.bam}  \
+            --bqsr-recal-file {output.grpFile} -O {output.bam} > {log.BQSR} 2>&1
+        samtool index -@ {threads} {output.bam}
+        """
+
+
+# get correctGC bam files (correct GC bias for CNV )
+## computeGC
+rule computeGCBias:
+    input:
+        bam=RG_dir+"/{sample_id}.bam",
+        gn_blacklist_path=gn_dir+"/hg38.blacklist.bed",
+        gn_2bit_path=gn_dir+"/hg38.2bit"
+    output: 
+        freq=outdir+"/GC_bias/{sample_id}.txt",
+        pdf=outdir+"/GC_bias/{sample_id}.pdf",
+    log:
+        outdir+"/GC_bias/log/{sample_id}.log"
+    conda:
+        "envs/DNA.yml"
+    threads: 16
+    params:
+        # bl="ref/gtf/hg38_blacklist.bed",
+        # genomeSize=2862010578, # hg38
+        # ref="/BioII/lulab_b/baopengfei/shared_reference/hg38/2bit/hg38.2bit"
+    shell:
+        """
+        computeGCBias \
+            --numberOfProcessors {threads} \
+            --blackListFileName  {input.gn_blacklist_path} \
+            --effectiveGenomeSize {gn_size} \
+            --biasPlot {output.pdf} \
+            --genome {input.gn_2bit_path} \
+            --bamfile {input.bam} \
+            --GCbiasFrequenciesFile {output.freq} \
+            > {log} 2>&1
+        """
+
+## correctGC
+rule correctGCBias:
+    input:
+        bam=RG_dir+"/{sample_id}.bam",
+        freq=outdir+"/GC_bias/{sample_id}.txt",
+        gn_2bit_path=gn_dir+"/hg38.2bit"
+    output: 
+        bam=GC_dir+"/{sample_id}.bam",
+        #bai=GC_dir+"/{sample_id}.bam.bai",
+    log:
+        GC_dir+"/log/{sample_id}.log"
+    conda:
+        "envs/DNA.yml"
+    threads: 16
+    params:
+        # genomeSize=2862010578,
+        # ref="/BioII/lulab_b/baopengfei/shared_reference/hg38/2bit/hg38.2bit"
+    shell:
+        """
+        correctGCBias \
+            --numberOfProcessors {threads} \
+            --effectiveGenomeSize {gn_size} \
+            --genome {input.gn_2bit_path} \
+            --bamfile {input.bam} \
+            --GCbiasFrequenciesFile {input.freq} \
+            --correctedFile {output.bam} \
+            > {log} 2>&1
+        """
+
+
+# get WIG files (for IGV visualization)
+rule wig:
+    input:
+        bam=outdir+"/bam/{sample_id}.bam" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped/{sample_id}.bam"
+    output:
+        bigwig=outdir+"/wig/{sample_id}.bigwig"
+    log:
+        log=outdir+"/wig/log/{sample_id}.log"
+    conda:
+        "envs/DNA.yml"
+    threads: 10 
+    params:
+        bin=wig_binsize
+    shell:
+        """
+        bamCoverage --binSize {params.bin} --numberOfProcessors {threads} --extendReads --normalizeUsing CPM -b {input.bam} -o {output.bigwig} > {log.log} 2>&1 
+        """
+
+# sum QC
+rule wgs_qc:
+    input:
+        bam=outdir+"/bam/{sample_id}.bam" if not config["remove_duplications"] else outdir+"/bam-sorted-deduped/{sample_id}.bam"
+    output:
+        saturation_qc=outdir+"/wgs_qc/saturation/{sample_id}.txt.300",
+        saturations_30k=outdir+"/wgs_qc/saturation/{sample_id}.txt.3000",
+        saturation_300k=outdir+"/wgs_qc/saturation/{sample_id}.txt.30000",
+        enrich_qc=outdir+"/wgs_qc/enrich/{sample_id}.txt",
+    conda:
+        "envs/r35.yml"
+    log:
+        outdir+"/wgs_qc/log/{sample_id}_wgsqc.log"
+    params:
+        outdir+"/wgs_qc/saturation/{sample_id}.txt"
+    shell:
+        """
+        Rscript scripts/wgs_qc.R -i {input.bam} -sr {params} -er {output.enrich_qc} \
+            > {log} 2>&1
+        """
+
+rule summary_wgs_qc:
+    input:
+        enrichments=expand("{outdir}/wgs_qc/enrich/{sample_id}.txt",outdir=outdir,sample_id=sample_ids),
+        saturations=expand("{outdir}/wgs_qc/saturation/{sample_id}.txt.300",outdir=outdir,sample_id=sample_ids),
+        saturations_30k=expand("{outdir}/wgs_qc/saturation/{sample_id}.txt.3000",outdir=outdir,sample_id=sample_ids),
+        saturation_3M=expand("{outdir}/wgs_qc/saturation/{sample_id}.txt.30000",outdir=outdir,sample_id=sample_ids),
+    output:
+        summary="{outdir}/wgs_qc/quality-control.txt"
+    run:
+        import pandas as pd
+        sample_ids=[path.split("/")[-1].split(".")[0] for path in input.enrichments]
+        records=[]
+        for sample_id in sample_ids:
+            enrichment_path=wildcards.outdir + "/wgs_qc/enrich/{}.txt".format(sample_id)
+            with open(enrichment_path) as f:
+                for line in f:
+                    key,value=line.strip().split("\t")
+                    if key == "enrichment.score.relH":
+                        relH=value
+                    elif key == "enrichment.score.GoGe":
+                        GoGe=value
+            saturation_path=wildcards.outdir + "/wgs_qc/saturation/{}.txt.300".format(sample_id)
+            sat_df=pd.read_csv(saturation_path,sep="\t")
+            es_sat_df=sat_df[sat_df["data"]=="estimated"]
+            estimated_saturation=es_sat_df.sort_values(by="subset")["correlation"].iloc[-1]
+            ob_sat_df=sat_df[sat_df["data"]=="observed"]
+            observed_saturation=ob_sat_df.sort_values(by="subset")["correlation"].iloc[-1]
+
+            saturation_path1=wildcards.outdir + "/wgs_qc/saturation/{}.txt.3000".format(sample_id)
+            sat_df1=pd.read_csv(saturation_path1,sep="\t")
+            es_sat_df1=sat_df1[sat_df1["data"]=="estimated"]
+            estimated_saturation1=es_sat_df1.sort_values(by="subset")["correlation"].iloc[-1]
+            ob_sat_df1=sat_df1[sat_df1["data"]=="observed"]
+            observed_saturation1=ob_sat_df1.sort_values(by="subset")["correlation"].iloc[-1]
+
+            saturation_path2=wildcards.outdir + "/wgs_qc/saturation/{}.txt.30000".format(sample_id)
+            sat_df2=pd.read_csv(saturation_path2,sep="\t")
+            es_sat_df2=sat_df2[sat_df2["data"]=="estimated"]
+            estimated_saturation2=es_sat_df2.sort_values(by="subset")["correlation"].iloc[-1]
+            ob_sat_df2=sat_df2[sat_df2["data"]=="observed"]
+            observed_saturation2=ob_sat_df2.sort_values(by="subset")["correlation"].iloc[-1]
+
+            records.append((sample_id,relH,GoGe,estimated_saturation,observed_saturation,estimated_saturation1,observed_saturation1,estimated_saturation2,observed_saturation2))
+        table=pd.DataFrame.from_records(records)
+        table.columns=["sample_id","enrichment.score.relH","enrichment.score.GoGe","estimated.max.saturation","observed.max.saturation","estimated.max.saturation.3k","observed.max.saturation.3k","estimated.max.saturation.30k","observed.max.saturation.30k"]
+        table.to_csv(output.summary,sep="\t",index=False)
+
+# get (original) bam AlignmentSummaryMetrics
+rule AlignmentSummaryMetrics:
+    input:
+        bam=outdir+"/bam-sorted/{sample_id}.bam",
+        gn_fa_path=gn_dir+"/genome.fa"
+    output:
+        outdir+"/firstAlignmentSummary/{sample_id}.AlignmentSummaryMetrics.txt"
+    log:
+        outdir+"/firstAlignmentSummary/log/{sample_id}.AlignmentSummaryMetrics.log"
+    conda:
+        "envs/DNA.yml"
+    params:
+        java="--java-options -Xmx10G"
+    shell:
+        """
+        gatk {params.java} CollectAlignmentSummaryMetrics \
+            -R {input.gn_fa_path} \
+            -I {input.bam} \
+            -O {output} \
+            > {log} 2>&1
+        """
+
+# get (original) bam stat
+rule getBamStatistics:
+    input:
+        bam=outdir+"/bam-sorted/{sample_id}.bam"
+    output:
+        summary=outdir+"/stats/{sample_id}.txt"
+    conda:
+        "envs/DNA.yml"
+    shell:
+        """
+        samtools stats {input.bam} > {output.summary}
+        """
+
+# Summarize histogram of fragment length from samtools stats output
+rule getFragmentSize:
+    input:
+        stats=expand("{outdir}/stats/{sample_id}.txt",outdir=outdir,sample_id=sample_ids)
+    output:
+        hist=outdir+"/fragment-length/histogram.txt"
+    run:
+        import re
+        import pandas as pd
+        records=[]
+        for path in input.stats:
+            sample_id=re.sub(".txt$","",path.split("/")[-1])
+            with open(path) as f:
+                for line in f:
+                    if not line.startswith("IS"):
+                        continue
+                    #IS, insert size, pairs total, inward oriented pairs, outward oriented pairs, other pairs
+                    fields=line.strip().split("\t")
+                    IS, N=fields[1],fields[3]
+                    records.append((sample_id,int(IS),int(N)))
+        fsHistTable=pd.DataFrame.from_records(records)
+        fsHistTable.columns=["sample_id","insertion-size","count"]
+        fsHist=fsHistTable.pivot(index="insertion-size",columns="sample_id",values="count")
+        fsHist.to_csv(output.hist,sep="\t")
+            
+
+
+# get count matrix
+rule count_matrix_gene:
+    input:
+        bam=expand(bam_dir+"/{sample_id}.bam",sample_id=sample_ids,region=regions)
+    output:
+        gene_matrix=outdir+"/matrix/count_matrix_{region}.txt",
+        gene_sum=outdir+"/matrix/count_matrix_{region}.txt.summary",
+        #gene_TPM=outdir+"/matrix/TPM_matrix_{region}.txt",
+        # gene_CPM=outdir+"/matrix/CPM_matrix_{region}.txt",
+        gene_CPM_TMM=outdir+"/matrix/CPM-TMM_matrix_{region}.txt",
+    log:
+        log1=outdir+"/matrix/log/count_matrix_{region}.log",
+        # CPM=outdir+"/matrix/log/CPM_matrix_{region}.log",
+        CPM_TMM=outdir+"/matrix/log/CPM-TMM_matrix_{region}.log",
+        #TPM=outdir+"/matrix/log/TPM_matrix_{region}.log",
+    conda:
+        "envs/DNA.yml"
+    threads: 16
+    params:
+        bam=bam_dir+"/{"+",".join(sample_ids)+"}.bam",
+        tmp=outdir+"/matrix/tmp_{region}",
+        region="{region}",
+        gtf1=gtf_dir+"/{region}.gtf"
+    shell:
+        """
+        featureCounts -T {threads} -O -t {params.region} -g gene_id -M -p \
+            -a {params.gtf1} \
+            -o {output.gene_matrix} {params.bam} \
+            > {log.log1} 2>&1
+        
+        Rscript scripts/multiFeatureCounts2countMat.R \
+            -i {output.gene_matrix}  \
+            -o {params.tmp} ;
+        mv {params.tmp} {output.gene_matrix};
+
+        Rscript scripts/run-NormCountMat.R \
+            -i {output.gene_matrix} \
+            -o {output.gene_CPM_TMM} \
+            -m TMM \
+            > {log.CPM_TMM} 2>&1
+        """ 
+        # Rscript scripts/run-NormCountMat.R \
+        #     -i {output.gene_matrix} \
+        #     -o {output.gene_CPM} \
+        #     -m none \
+        #     > {log.CPM} 2>&1
+
+

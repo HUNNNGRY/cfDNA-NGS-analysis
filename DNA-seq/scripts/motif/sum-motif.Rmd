@@ -1,0 +1,226 @@
+---
+title: "motif5"
+author: "bpf"
+date: "10/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/BioII/lulab_b/baopengfei/projects/exOmics/DNA-seq")
+```
+
+
+# read func.
+```{r}
+a <- function(x){
+  # read data and set column names
+  #x <- "./output/lulab/motif5/CRC-PKU-10-wgs_motif5.txt"
+  data <- read.table(x, stringsAsFactors = F, sep = "\t", header=FALSE,check.names = F)
+  
+  data$motif5 <- as.character(lapply(strsplit(data$V1,":", ), function(x) x[1]))
+  data$sample <- as.character(lapply(strsplit(data$V1,":", ), function(x) x[2]))
+
+  l <- grep("N",data$motif5,invert = T)
+  data <- data[l,c("motif5","sample")]
+  sample <- as.character(lapply(strsplit(basename(x),"_" ), function(x) x[1]))
+  colnames(data)[2] <- sample
+  
+  # return the data
+  return(data)
+}
+
+# get mds by sample
+get.mds <- function(x){
+  #x <- motif.ratio$`NC-PKU-10-wgs`
+  mds <- x
+  for(i in 1:length(x)){
+    mds[i] <- -x[i]*log(x[i])/log(256)
+  }
+  return(sum(mds))
+}
+
+cmp.boxplot <- function(matrix,point.size=1,point.col="black",point.alpha=0.6,title="",y.lim,x.title="group",y.title="value"){
+  library(ggplot2)
+  b <- runif(nrow(matrix), -0.2, 0.2)
+  #p <- compare
+  ggplot(matrix, aes(x = group, y = value))+ 
+    labs(y=y.title,x=x.title,title = title)+  
+    geom_boxplot(position=position_dodge(0.5),width=0.5,size=0.4,
+                 outlier.alpha = 1, outlier.size = 0)+
+    geom_point(aes(x=as.numeric(group)+b,y=value),size=point.size,color=point.col, stroke=0.5,alpha=point.alpha) +
+    #geom_violin(draw_quantiles = T) +
+    geom_hline(yintercept = 0, color="grey50",linetype="dashed") + 
+    ylim(y.lim) +
+    theme_bw() + 
+    theme(plot.title = element_text(size = 18,color="black",hjust = 0.5,face="bold",family="arial"),
+          axis.title = element_text(size = 18,color ="black",face="bold",family="arial"), 
+          axis.text = element_text(size= 18,color = "black",family="arial"),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1 ),
+          panel.grid=element_blank(),
+          legend.position = "top",
+          legend.text = element_text(size= 12),
+          legend.title= element_text(size= 12))
+}
+
+
+```
+
+## sum motif
+```{r }
+files <- Sys.glob("./output/lulab/motif5/*_motif5.txt")  # CRC-PKU-10-wgs     _promoter150TSS50.bed  _20001000TSS.bed  _promoter300100exon1end.bed  _exon1end10002000.bed
+
+
+# run the anonymous function defined above
+motif <- lapply(files, a)
+rownames(motif[[1]])
+motif <- do.call("cbind", motif)
+motif <- motif[,!duplicated(colnames(motif))]
+dir.create("./output/lulab/motif5/sum")
+write.table(motif,"./output/lulab/motif5/sum/fre.txt",sep = "\t",quote = F,row.names = F,col.names = T)
+
+## get ratio
+motif <- read.table("./output/lulab/motif5/sum/fre.txt",sep = "\t",row.names = 1, check.names = F, header = T)
+s <- colSums(motif)
+
+motif.ratio <- motif
+for (i in 1:nrow(motif)){
+  motif.ratio[i,] <- motif[i,]/s
+}
+# motif.ratio <- motif/s
+# head(s)
+# motif[1:3,1:3]
+write.table(motif.ratio,"./output/lulab/motif5/sum/ratio.txt",sep = "\t",quote = F,row.names = T,col.names = T)
+
+## get motif diversity score (MDS)
+#motif.mds <- motif.ratio
+
+motif.mds <- apply(motif.ratio,2,get.mds)
+motif.mds.df <- as.data.frame(motif.mds)
+motif.mds.df$group <- as.character(lapply(strsplit(rownames(motif.mds.df),"-"),function(x) x[1]))
+colnames(motif.mds.df)[1] <- "value"
+
+str(motif.mds.df)
+
+write.table(t(motif.mds),"./output/lulab/motif5/sum/motif_diversity_score.txt",sep = "\t",quote = F,row.names = F,col.names = T)
+
+```
+
+
+# filter sample ID
+```{r}
+crc.id <- read.delim("../../multi-omics-explore/meta/lulab/paired-wgs-CRC-passQCloose.txt",header = F,stringsAsFactors = F)$V1
+stad.id <- read.delim("../../multi-omics-explore/meta/lulab/paired-wgs-STAD-passQCloose.txt",header = F,stringsAsFactors = F)$V1
+nc.id <- read.delim("../../multi-omics-explore/meta/lulab/paired-wgs-NC-passQCloose.txt",header = F,stringsAsFactors = F)$V1
+```
+
+# MDS box plot
+```{r}
+# motif.mds.df$group <- factor(motif.mds.df$group,levels = c("NC","CRC","STAD"))
+# matrix <- motif.mds.df
+# point.size <- 1
+# point.col <- "black"
+# point.alpha <- 0.6
+# title <- ""
+# y.lim <- c(0.93,0.96)
+# x.title <- "group"
+# y.title <- "value"
+
+library(ggplot2)
+library(ggpubr)
+library(ggsci)
+# #matrix <- read.table("./output/lulab/motif5/sum/motif_diversity_score.txt",sep = "\t",check.names = F,header = T)
+# motif.mds$sample <- rownames(motif.mds)
+# motif.mds$group <- as.character(lapply(strsplit(as.character(motif.mds$sample),"\\-"), function(x) x[1]))
+
+
+matrix <- as.data.frame(motif.mds.df)
+matrix <- matrix[rownames(matrix) %in% c(nc.id,crc.id,stad.id),]
+matrix$group <- factor(matrix$group,levels = c("NC","CRC","STAD"))
+b <- runif(nrow(matrix), -0.2, 0.2)
+#p <- compare
+ggplot(matrix, aes(x = group, y = value))+  # , fill=group
+  labs(y="Motif diversity score")+   # x=x.title,title = title
+  geom_boxplot(position=position_dodge(0.5),width=0.5,size=0.4,
+               outlier.alpha = 0, outlier.size = 0)+
+  geom_point(aes(x=as.numeric(group)+b,y=value),size=2,color="black", stroke=0.5,alpha=0.6) +
+  #geom_violin(draw_quantiles = T) +
+  #geom_hline(yintercept = 0, color="grey50",linetype="dashed") + 
+  #ylim(c(format(min(matrix$value),digit=2),format(max(matrix$value),digit=2))) +
+  #ggsci::scale_fill_nejm()+
+  theme_bw() + 
+  theme(plot.title = element_text(size = 18,color="black",hjust = 0.5,face="bold",family="arial"),
+        axis.title = element_text(size = 18,color ="black",face="bold",family="arial"), 
+        axis.text = element_text(size= 18,color = "black",family="arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(), # angle = 45, hjust = 1 
+        panel.grid=element_blank(),
+        legend.position = "top",
+        legend.text = element_text(size= 12),
+        legend.title= element_text(size= 12)) +
+        ggpubr::stat_compare_means(ref.group = "NC",
+                                method = "wilcox.test",
+                                method.args = list(alternative = "greater"),
+                                label = "p.format",size = 8, vjust=0.6 # hide.ns=T,
+                                )
+
+
+```
+
+# single motif box plot
+```{r }
+motif <- read.table("./output/lulab/motif5/sum/ratio.txt",sep = "\t",row.names = 1, check.names = F, header = T)
+motif <- motif*100
+motif <- motif[,colnames(motif) %in% c(nc.id,crc.id,stad.id)]
+
+# CRC
+crc <- read.table("./output/lulab/motif5/sum/fre.diff.STAD.NC.txt",sep = "\t",row.names = 1, check.names = F, header = T)
+crc.motif <- rownames(crc)[1:6]
+crc.motif <- motif[crc.motif,]
+crc.motif$motif <- rownames(crc.motif)
+crc.motif <- reshape2::melt(crc.motif,id.var="motif")
+crc.motif$group <- as.character(lapply(strsplit(as.character(crc.motif$variable),"\\-"), function(x) x[1]))
+#str(crc.motif)
+crc.motif$group <- factor(crc.motif$group,levels = c("NC","CRC","STAD"))
+
+wilcox.test(crc.motif[crc.motif$group=="STAD" & crc.motif$motif=="TCCA","value"],crc.motif[crc.motif$group=="NC" & crc.motif$motif=="TCCA","value"],alternative='two.sided')
+table(crc.motif$group)
+
+matrix <- crc.motif[crc.motif$group!="CRC",]
+library(ggplot2)
+library(ggpubr)
+library(ggsci)
+b <- runif(nrow(matrix), -0.2, 0.2)
+#p <- compare
+ggplot(matrix, aes(x = motif, y = value, fill=group))+  # , fill=group
+  labs(y="Motif frequency(%)")+   # x=x.title,title = title
+  geom_boxplot(position=position_dodge(0.5),width=0.5,size=0.4,
+               outlier.alpha = 0, outlier.size = 0)+
+  #geom_point(aes(x=as.numeric(group)+b,y=value),size=2,color="black", stroke=0.5,alpha=0.6) +
+  #geom_violin(draw_quantiles = T) +
+  #geom_hline(yintercept = 0, color="grey50",linetype="dashed") + 
+  #ylim(c(format(min(matrix$value),digit=2),format(max(matrix$value),digit=2))) +
+  scale_fill_manual(values = c("steelblue4","firebrick2"))+ # "grey50",
+  theme_bw() + 
+  theme(plot.title = element_text(size = 18,color="black",hjust = 0.5,face="bold",family="arial"),
+        axis.title = element_text(size = 18,color ="black",face="bold",family="arial"), 
+        axis.text = element_text(size= 18,color = "black",family="arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1 ,vjust = 0.5), # 
+        panel.grid=element_blank(),
+        legend.position = "top",
+        legend.text = element_text(size= 12),
+        legend.title= element_text(size= 12)) +
+        ggpubr::stat_compare_means(#comparisons = list(c("CRC","NC")),# ref.group = "NC",
+                                method = "wilcox.test",
+                                #method.args = list(alternative = "greater"),
+                                label = "p.signif",size = 8, vjust=0.6, hide.ns=F,
+                                )
+
+
+```
+
