@@ -1,0 +1,82 @@
+{
+    "__default__" :
+    {
+        "jobname": "{rule}-{wildcards}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}-{wildcards}.out",
+        "error": "log/{dataset}/{rule}-{wildcards}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "getFragmentSize" :
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "wisecondorxGetRef" :
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "summary_wgs_qc":
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "count_matrix_gene":
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}-{wildcards.region}.out",
+        "error": "log/{dataset}/{rule}-{wildcards.region}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "wisecondorxGeneCNVmat":
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "bwa_alignment":
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "16",
+        "output": "log/{dataset}/{rule}-{wildcards.sample_id}.out",
+        "error": "log/{dataset}/{rule}-{wildcards.sample_id}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    },
+    "countMicrobe":
+    {
+        "jobname": "{rule}",
+        "partition": "Acluster",
+        "threads": "{threads}",
+        "output": "log/{dataset}/{rule}-{wildcards.sample_id}.out",
+        "error": "log/{dataset}/{rule}-{wildcards.sample_id}.err",
+        "nodesNum": "1",
+        "excludeNodesName": "node15,node16,node17"
+    }
+}

@@ -123,8 +123,13 @@ if (ex=="FALSE"){
   y <- edgeR::DGEList(counts=count.matrix,group=tissue.types)  # def: lib.size=colSums()
 }else{
   message("use provided path as lib.size in DGEList")
-  libSize <- read.delim(ex,header = F,stringsAsFactors = F)$V1
-  y <- edgeR::DGEList(counts=count.matrix,group=tissue.types,lib.size=libSize)
+  #libSize <- read.delim(ex,header = F,stringsAsFactors = F)$V1
+  #libSize <- read.table(ex,header = F,stringsAsFactors = F)$V2 #V1: sample
+  libSize <- read.table(ex,header = F,stringsAsFactors = F)
+  tmp <- libSize$V1
+  libSize <- libSize$V2
+  names(libSize) <- tmp
+  y <- edgeR::DGEList(counts=count.matrix,group=tissue.types,lib.size=libSize[s])
 }
 print(paste0("dim: ",dim(y$counts)))
 print(paste0("grp: ",table(tissue.types)))

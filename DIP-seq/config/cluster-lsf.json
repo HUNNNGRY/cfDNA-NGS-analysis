@@ -1,0 +1,62 @@
+{
+    "__default__" :
+    {
+        "jobname": "{rule}-{wildcards.sample_id}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}-{wildcards.sample_id}.out",
+        "error": "log/{dataset}/{rule}-{wildcards.sample_id}.err"
+    },
+
+    "summary_qc" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    },
+
+    "count_matrix_promoter" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    },
+    "count_matrix_gene" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    },
+    "count_matrix_CpG_island" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    },
+    "count_matrix_promoter150TSS50" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    },
+    "count_matrix_promoter300exon1end100" :
+    {
+        "jobname": "{rule}",
+        "threads": "{threads}",
+        "queue" : "TEST-1U",
+        "output": "log/{dataset}/{rule}.out",
+        "error": "log/{dataset}/{rule}.err"
+    }
+
+
+}
